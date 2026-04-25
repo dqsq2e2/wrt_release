@@ -47,25 +47,58 @@ fix_kconfig_recursive_dependency() {
 }
 
 remove_wifi_menu() {
-    # Remove WiFi menu from LuCI
-    local luci_network_controller="$BUILD_DIR/feeds/luci/modules/luci-mod-network/htdocs/luci-static/resources/view/network"
-    
-    if [ -d "$luci_network_controller" ]; then
-        # Remove wireless.js to disable WiFi interface
-        rm -f "$luci_network_controller/wireless.js" 2>/dev/null
-        echo "已移除 LuCI WiFi 界面文件"
-    fi
-    
-    # Remove WiFi menu entry
+    # 安全地移除 WiFi 菜单项，不破坏其他网络配置
     local luci_network_menu="$BUILD_DIR/feeds/luci/modules/luci-mod-network/root/usr/share/luci/menu.d/luci-mod-network.json"
     
     if [ -f "$luci_network_menu" ]; then
-        # Backup original
+        echo "正在从 LuCI 菜单中移除 WiFi 选项..."
+        
+        # 备份原文件
         cp "$luci_network_menu" "$luci_network_menu.bak"
         
-        # Remove wireless entries from menu
-        sed -i '/wireless/d' "$luci_network_menu"
+        # 使用 jq 或 sed 精确删除 wireless 相关条目
+        # 只删除 wireless 菜单项，保留其他网络配置
+        if command -v jq &> /dev/null; then
+            # 使用 jq 精确删除
+            jq 'del(.["admin/network/wireless"])' "$luci_network_menu" > "$luci_network_menu.tmp"
+            mv "$luci_network_menu.tmp" "$luci_network_menu"
+        else
+            # 使用 sed 删除 wireless 相关的 JSON 块
+            # 匹配从 "admin/network/wireless" 开始到对应的 } 结束
+            sed -i '/"admin\/network\/wireless"/,/^[[:space:]]*},\?$/d' "$luci_network_menu"
+        fi
+        
         echo "已从 LuCI 菜单中移除 WiFi 选项"
+    fi
+    
+    # 可选：创建一个 uci-defaults 脚本在运行时隐藏 WiFi 界面
+    local uci_defaults_dir="$BUILD_DIR/package/base-files/files/etc/uci-defaults"
+    if [ -d "$uci_defaults_dir" ]; then
+        cat > "$uci_defaults_dir/99-hide-wifi-menu" << 'EOF'
+#!/bin/sh
+# Hide WiFi menu in LuCI
+uci -q batch << EOI
+delete luci.main.wireless
+commit luci
+EOI
+exit 0
+EOF
+        chmod +x "$uci_defaults_dir/99-hide-wifi-menu"
+        echo "已创建运行时 WiFi 菜单隐藏脚本"
+    fi
+    
+    # 添加 CSS 隐藏 WiFi 相关元素（额外保险）
+    local luci_base_dir="$BUILD_DIR/feeds/luci/modules/luci-base/htdocs/luci-static/resources"
+    if [ -d "$luci_base_dir" ]; then
+        cat > "$BUILD_DIR/package/base-files/files/www/luci-static/custom.css" << 'EOF'
+/* Hide WiFi menu items */
+[href*="wireless"],
+[data-page*="wireless"],
+.cbi-section-node[id*="wireless"] {
+    display: none !important;
+}
+EOF
+        echo "已添加 CSS 隐藏规则"
     fi
 }
 
