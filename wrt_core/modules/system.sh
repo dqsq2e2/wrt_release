@@ -88,9 +88,12 @@ EOF
     fi
     
     # 添加 CSS 隐藏 WiFi 相关元素（额外保险）
-    local luci_base_dir="$BUILD_DIR/feeds/luci/modules/luci-base/htdocs/luci-static/resources"
-    if [ -d "$luci_base_dir" ]; then
-        cat > "$BUILD_DIR/package/base-files/files/www/luci-static/custom.css" << 'EOF'
+    local custom_css_dir="$BUILD_DIR/package/base-files/files/www/luci-static"
+    if [ ! -d "$custom_css_dir" ]; then
+        mkdir -p "$custom_css_dir"
+    fi
+    
+    cat > "$custom_css_dir/custom.css" << 'EOF'
 /* Hide WiFi menu items */
 [href*="wireless"],
 [data-page*="wireless"],
@@ -98,8 +101,7 @@ EOF
     display: none !important;
 }
 EOF
-        echo "已添加 CSS 隐藏规则"
-    fi
+    echo "已添加 CSS 隐藏规则"
 }
 
 fix_natmap_makefile() {
