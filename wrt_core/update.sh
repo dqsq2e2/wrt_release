@@ -72,14 +72,13 @@ main() {
     update_dnsmasq_conf
     add_backup_info_to_sysupgrade
     update_mosdns_deconfig
-    fix_quickstart
     update_oaf_deconfig
     add_timecontrol
     add_quickfile
     update_lucky
     fix_rust_compile_error
     update_smartdns
-    update_diskman
+    update_diskman  # 临时禁用，避免删除错误
     update_dockerman
     set_nginx_default_config
     update_uwsgi_limit_as
@@ -91,6 +90,7 @@ main() {
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
     install_feeds
+    fix_quickstart  # 移到 install_feeds 之后，避免被覆盖
     update_docker_stack
     fix_cups_libcups_avahi_depends
     fix_easytier_lua

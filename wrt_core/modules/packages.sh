@@ -70,15 +70,33 @@ update_golang() {
 }
 
 install_small8() {
+    # 先安装 tar 及其完整依赖链（iStore 的关键依赖）
+    echo "正在强制安装 tar 及其完整依赖链..."
+    # 安装压缩库（按依赖顺序）
+    ./scripts/feeds install -p packages -f libbz2 bzip2
+    ./scripts/feeds install -p packages -f liblzma xz xz-utils
+    ./scripts/feeds install -p packages -f libzstd
+    ./scripts/feeds install -p packages -f libacl libattr
+    ./scripts/feeds install -p packages -f tar
+    
+    # 安装 iStore 核心组件（强制安装，确保不被跳过）
+    echo "正在强制安装 iStore 核心组件..."
+    ./scripts/feeds install -p small8 -f taskd luci-lib-xterm luci-lib-taskd
+    ./scripts/feeds install -p small8 -f luci-app-store
+    ./scripts/feeds install -p small8 -f quickstart luci-app-quickstart
+    ./scripts/feeds install -p small8 -f luci-app-istorex
+    
+    # 安装其他 small8 包
     ./scripts/feeds install -p small8 -f xray-core xray-plugin dns2tcp dns2socks haproxy hysteria \
         naiveproxy shadowsocks-rust sing-box v2ray-core v2ray-geodata geoview v2ray-plugin \
         tuic-client chinadns-ng ipt2socks tcping trojan-plus simple-obfs shadowsocksr-libev \
         v2dat mosdns luci-app-mosdns adguardhome luci-app-adguardhome ddns-go \
-        luci-app-ddns-go taskd luci-lib-xterm luci-lib-taskd luci-app-store quickstart \
-        luci-app-quickstart luci-app-istorex luci-app-cloudflarespeedtest netdata luci-app-netdata \
+        luci-app-ddns-go luci-app-cloudflarespeedtest netdata luci-app-netdata \
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
         tailscale luci-app-tailscale oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
         msd_lite luci-app-msd_lite cups luci-app-cupsd
+    
+    echo "tar 完整依赖链和 iStore 核心组件安装完成"
 }
 
 install_passwall() {
@@ -280,7 +298,10 @@ update_diskman() {
     if [ -d "$path" ]; then
         echo "正在更新 diskman..."
         cd "$BUILD_DIR/feeds/luci/applications" || return
-        \rm -rf "luci-app-diskman"
+        
+        # 强制删除旧的 luci-app-diskman
+        rm -rf "luci-app-diskman" 2>/dev/null || true
+        chmod -R u+w "luci-app-diskman" 2>/dev/null && rm -rf "luci-app-diskman" 2>/dev/null || true
 
         if ! git clone --filter=blob:none --no-checkout "$repo_url" diskman; then
             echo "错误：从 $repo_url 克隆 diskman 仓库失败" >&2
@@ -295,7 +316,11 @@ update_diskman() {
 
         mv applications/luci-app-diskman ../luci-app-diskman || return
         cd .. || return
-        \rm -rf diskman
+        
+        # 强制删除临时目录
+        chmod -R u+w diskman 2>/dev/null || true
+        rm -rf diskman 2>/dev/null || true
+        
         cd "$BUILD_DIR"
 
         sed -i 's/fs-ntfs /fs-ntfs3 /g' "$path/Makefile"
