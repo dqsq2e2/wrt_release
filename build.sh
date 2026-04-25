@@ -207,7 +207,130 @@ apply_config
 remove_uhttpd_dependency
 
 cd "$BASE_PATH/../$BUILD_DIR"
+
+# 运行 defconfig 生成完整配置
 make defconfig
+
+# 检查 iStore 核心组件是否被禁用
+echo "正在检查 iStore 核心组件状态..."
+NEED_FORCE=0
+
+if ! grep -q "^CONFIG_PACKAGE_luci-app-store=y" .config; then
+    echo "⚠️  luci-app-store 被禁用"
+    NEED_FORCE=1
+fi
+
+if ! grep -q "^CONFIG_PACKAGE_luci-app-quickstart=y" .config; then
+    echo "⚠️  luci-app-quickstart 被禁用"
+    NEED_FORCE=1
+fi
+
+if ! grep -q "^CONFIG_PACKAGE_tar=y" .config; then
+    echo "⚠️  tar 被禁用"
+    NEED_FORCE=1
+fi
+
+if ! grep -q "^CONFIG_PACKAGE_taskd=y" .config; then
+    echo "⚠️  taskd 被禁用"
+    NEED_FORCE=1
+fi
+
+if ! grep -q "^CONFIG_PACKAGE_luci-lib-taskd=y" .config; then
+    echo "⚠️  luci-lib-taskd 被禁用"
+    NEED_FORCE=1
+fi
+
+if [ $NEED_FORCE -eq 1 ]; then
+    echo ""
+    echo "=========================================="
+    echo "检测到 iStore 组件被 defconfig 禁用"
+    echo "正在强制启用 iStore 及其依赖..."
+    echo "=========================================="
+    
+    # 删除所有 iStore 相关配置
+    sed -i '/CONFIG_PACKAGE_luci-app-store/d' .config
+    sed -i '/CONFIG_PACKAGE_luci-i18n-store-zh-cn/d' .config
+    sed -i '/CONFIG_PACKAGE_luci-app-quickstart/d' .config
+    sed -i '/CONFIG_PACKAGE_luci-i18n-quickstart-zh-cn/d' .config
+    sed -i '/CONFIG_PACKAGE_luci-app-istoreenhance/d' .config
+    sed -i '/CONFIG_PACKAGE_luci-i18n-istoreenhance-zh-cn/d' .config
+    sed -i '/CONFIG_PACKAGE_taskd/d' .config
+    sed -i '/CONFIG_PACKAGE_luci-lib-taskd/d' .config
+    sed -i '/CONFIG_PACKAGE_luci-lib-xterm/d' .config
+    sed -i '/CONFIG_PACKAGE_luci-lib-ipkg/d' .config
+    sed -i '/CONFIG_PACKAGE_quickstart/d' .config
+    sed -i '/CONFIG_PACKAGE_istoreenhance/d' .config
+    sed -i '/CONFIG_PACKAGE_mount-utils/d' .config
+    
+    # 删除 tar 相关配置
+    sed -i '/CONFIG_PACKAGE_tar=\|CONFIG_PACKAGE_TAR_/d' .config
+    sed -i '/CONFIG_PACKAGE_bzip2/d' .config
+    sed -i '/CONFIG_PACKAGE_libbz2/d' .config
+    sed -i '/CONFIG_PACKAGE_xz/d' .config
+    sed -i '/CONFIG_PACKAGE_liblzma/d' .config
+    sed -i '/CONFIG_PACKAGE_libacl/d' .config
+    sed -i '/CONFIG_PACKAGE_libattr/d' .config
+    sed -i '/CONFIG_PACKAGE_libzstd/d' .config
+    
+    # 强制启用所有依赖和组件
+    cat >> .config << 'EOF'
+
+# ========================================
+# iStore Force Enable (依赖被禁用时强制启用)
+# ========================================
+# Core Dependencies
+CONFIG_PACKAGE_curl=y
+CONFIG_PACKAGE_opkg=y
+CONFIG_PACKAGE_luci-lib-ipkg=y
+CONFIG_PACKAGE_libuci-lua=y
+CONFIG_PACKAGE_mount-utils=y
+CONFIG_PACKAGE_taskd=y
+CONFIG_PACKAGE_luci-lib-taskd=y
+CONFIG_PACKAGE_luci-lib-xterm=y
+
+# tar and its compression dependencies (完整依赖链)
+CONFIG_PACKAGE_tar=y
+
+# bzip2 support
+CONFIG_PACKAGE_bzip2=y
+CONFIG_PACKAGE_libbz2=y
+
+# xz/lzma support
+CONFIG_PACKAGE_xz=y
+CONFIG_PACKAGE_xz-utils=y
+CONFIG_PACKAGE_liblzma=y
+
+# zstd support
+CONFIG_PACKAGE_libzstd=y
+
+# ACL and xattr support
+CONFIG_PACKAGE_libacl=y
+CONFIG_PACKAGE_libattr=y
+
+# tar feature flags
+CONFIG_PACKAGE_TAR_BZIP2=y
+CONFIG_PACKAGE_TAR_GZIP=y
+CONFIG_PACKAGE_TAR_XZ=y
+CONFIG_PACKAGE_TAR_ZSTD=y
+CONFIG_PACKAGE_TAR_POSIX_ACL=y
+CONFIG_PACKAGE_TAR_XATTR=y
+
+# iStore Apps
+CONFIG_PACKAGE_luci-app-store=y
+CONFIG_PACKAGE_luci-i18n-store-zh-cn=y
+CONFIG_PACKAGE_quickstart=y
+CONFIG_PACKAGE_luci-app-quickstart=y
+CONFIG_PACKAGE_luci-i18n-quickstart-zh-cn=y
+CONFIG_PACKAGE_istoreenhance=y
+CONFIG_PACKAGE_luci-app-istoreenhance=y
+CONFIG_PACKAGE_luci-i18n-istoreenhance-zh-cn=y
+EOF
+    
+    echo "✅ iStore 组件已强制启用"
+    echo "注意：不再运行 defconfig 以避免配置被覆盖"
+else
+    echo "✅ iStore 核心组件配置正常"
+fi
 
 if grep -qE "^CONFIG_TARGET_x86_64=y" "$CONFIG_FILE"; then
     DISTFEEDS_PATH="$BASE_PATH/../$BUILD_DIR/package/emortal/default-settings/files/99-distfeeds.conf"
@@ -225,8 +348,8 @@ if [[ -d $TARGET_DIR ]]; then
     find "$TARGET_DIR" -type f \( -name "*.bin" -o -name "*.manifest" -o -name "*efi.img.gz" -o -name "*.itb" -o -name "*.fip" -o -name "*.ubi" -o -name "*rootfs.tar.gz" \) -exec rm -f {} +
 fi
 
-make download -j$(($(nproc) * 2))
-make -j$(($(nproc) + 1)) || make -j1 V=s
+make download -j$(($(nproc) * 3))
+make -j20 || make -j1 V=s
 
 FIRMWARE_DIR="$BASE_PATH/../firmware"
 \rm -rf "$FIRMWARE_DIR"
