@@ -18,6 +18,7 @@ on:
           - jdcloud_ipq60xx_immwrt
           - jdcloud_ipq60xx_libwrt
           - jdcloud_re-cp-03_immwrt
+          - jdcloud_re_cp_03_vikingyfy
           - link_nn6000v2_immwrt
           - linksys_mx4x00_immwrt
           - qihoo_360v6_immwrt
