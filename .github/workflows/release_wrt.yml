@@ -11,6 +11,7 @@ on:
         default: jdcloud_ipq60xx_immwrt
         options:
           - aliyun_ap8220_immwrt
+          - clx_s20p_nowifi_immwrt
           - cmcc_rax3000m_immwrt
           - gemtek_w1701k_immwrt
           - jdcloud_ax6000_immwrt
@@ -24,6 +25,7 @@ on:
           - redmi_ax6_immwrt
           - redmi_ax6_libwrt
           - redmi_ax6000_immwrt21
+          - supergateway_s20p_nowifi_immwrt
           - zn_m2_immwrt
           - zn_m2_libwrt
           - x64_immwrt
