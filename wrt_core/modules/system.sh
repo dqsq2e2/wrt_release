@@ -47,6 +47,28 @@ fix_kconfig_recursive_dependency() {
 }
 
 remove_wifi_menu() {
+    # 检查配置文件中是否禁用了 WiFi
+    # 如果配置中有 CONFIG_PACKAGE_hostapd-common=n 或 CONFIG_PACKAGE_wpad-*=n，说明禁用了 WiFi
+    local config_file="$BUILD_DIR/.config"
+    
+    # 如果 .config 还不存在，检查源配置文件
+    if [ ! -f "$config_file" ]; then
+        # 尝试从环境变量或参数获取配置文件名
+        # 这个阶段 .config 还没生成，所以跳过
+        echo "跳过 WiFi 菜单移除（配置文件尚未生成）"
+        return 0
+    fi
+    
+    # 检查是否禁用了 WiFi 包
+    if grep -q "CONFIG_PACKAGE_hostapd-common=n" "$config_file" || \
+       grep -q "CONFIG_PACKAGE_wpad.*=n" "$config_file" || \
+       grep -q "CONFIG_PACKAGE_iw=n" "$config_file"; then
+        echo "检测到 WiFi 已禁用，正在移除 WiFi 界面..."
+    else
+        echo "检测到 WiFi 已启用，保留 WiFi 界面"
+        return 0
+    fi
+    
     # 安全地移除 WiFi 菜单项，不破坏其他网络配置
     local luci_network_menu="$BUILD_DIR/feeds/luci/modules/luci-mod-network/root/usr/share/luci/menu.d/luci-mod-network.json"
     
@@ -733,5 +755,21 @@ remove_tweaked_packages() {
         if grep -q "^DEFAULT_PACKAGES += \$(DEFAULT_PACKAGES.tweak)" "$target_mk"; then
             sed -i 's/DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.tweak)/# DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.tweak)/g' "$target_mk"
         fi
+    fi
+}
+
+
+enable_turboacc_by_default() {
+    local turboacc_config="$BUILD_DIR/feeds/small8/luci-app-turboacc-mtk/root/etc/config/turboacc"
+    
+    if [ -f "$turboacc_config" ]; then
+        echo "正在设置 TurboACC 默认启用..."
+        # 只修改 global 段的 option set
+        sed -i "/config turboacc 'global'/,/^config/ {
+            s/option set '0'/option set '1'/
+        }" "$turboacc_config"
+        echo "TurboACC 已设置为默认启用"
+    else
+        echo "警告：未找到 TurboACC 配置文件: $turboacc_config" >&2
     fi
 }

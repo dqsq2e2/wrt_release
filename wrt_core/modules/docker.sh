@@ -1142,6 +1142,25 @@ update_docker_stack() {
         return 1
     fi
 
+    # 检查配置文件中是否启用了 Docker
+    local config_file="$build_dir/.config"
+    if [ -f "$config_file" ]; then
+        if ! grep -q "CONFIG_PACKAGE_dockerd=y" "$config_file"; then
+            echo "Docker 未启用，跳过 Docker 组件版本更新"
+            return 0
+        fi
+    else
+        # 如果 .config 不存在，检查是否有 dockerd Makefile
+        # 如果没有 dockerd，说明不需要更新
+        if [ ! -f "$build_dir/feeds/packages/utils/dockerd/Makefile" ] && \
+           [ ! -f "$build_dir/package/feeds/packages/dockerd/Makefile" ]; then
+            echo "未找到 dockerd，跳过 Docker 组件版本更新"
+            return 0
+        fi
+    fi
+
+    echo "检测到 Docker 已启用，开始更新 Docker 组件版本..."
+
     if [ "$dry_run" != "0" ] && [ "$dry_run" != "1" ]; then
         echo "错误：DOCKER_STACK_DRY_RUN 仅支持 0 或 1，当前值: $dry_run" >&2
         return 1

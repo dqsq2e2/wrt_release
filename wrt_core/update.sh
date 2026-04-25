@@ -50,7 +50,7 @@ main() {
     update_golang
     change_dnsmasq2full
     fix_mk_def_depends
-    remove_wifi_menu
+    # remove_wifi_menu  # 移到 build.sh 中，在配置生成后执行
     fix_natmap_makefile
     fix_rstrip_script
 
@@ -89,6 +89,7 @@ main() {
     fix_easytier_mk
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
+    enable_turboacc_by_default  # 设置 TurboACC 默认启用
     install_feeds
     fix_quickstart  # 移到 install_feeds 之后，避免被覆盖
     update_docker_stack

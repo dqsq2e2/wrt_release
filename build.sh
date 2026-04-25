@@ -185,7 +185,13 @@ apply_config() {
 
     cat "$BASE_PATH/deconfig/compile_base.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
 
-    cat "$BASE_PATH/deconfig/docker_deps.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
+    # 只有在配置文件中启用了 Docker 时才加载 docker_deps.config
+    if grep -q "CONFIG_PACKAGE_dockerd=y" "$BASE_PATH/../$BUILD_DIR/.config"; then
+        cat "$BASE_PATH/deconfig/docker_deps.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
+        echo "检测到 Docker 已启用，加载 docker_deps.config"
+    else
+        echo "Docker 未启用，跳过 docker_deps.config"
+    fi
 
     cat "$BASE_PATH/deconfig/proxy.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
 }
@@ -210,6 +216,10 @@ cd "$BASE_PATH/../$BUILD_DIR"
 
 # 运行 defconfig 生成完整配置
 make defconfig
+
+# 在配置生成后，检查是否需要移除 WiFi 界面
+source "$BASE_PATH/modules/system.sh"
+remove_wifi_menu
 
 # 检查 iStore 核心组件是否被禁用
 echo "正在检查 iStore 核心组件状态..."
