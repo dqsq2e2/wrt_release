@@ -3,8 +3,12 @@
 
 clone_repo() {
     if [[ ! -d $BUILD_DIR ]]; then
+        # 清理变量中的空格和换行符
+        REPO_URL=$(echo "$REPO_URL" | tr -d '\r\n' | xargs)
+        REPO_BRANCH=$(echo "$REPO_BRANCH" | tr -d '\r\n' | xargs)
+        
         echo "克隆仓库: $REPO_URL 分支: $REPO_BRANCH"
-        if ! git clone --depth 1 -b $REPO_BRANCH $REPO_URL $BUILD_DIR; then
+        if ! git clone --depth 1 -b "$REPO_BRANCH" "$REPO_URL" "$BUILD_DIR"; then
             echo "错误：克隆仓库 $REPO_URL 失败" >&2
             exit 1
         fi

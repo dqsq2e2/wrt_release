@@ -23,7 +23,7 @@ fi
 
 read_ini_by_key() {
     local key=$1
-    awk -F"=" -v key="$key" '$1 == key {print $2}' "$INI_FILE"
+    awk -F"=" -v key="$key" '$1 == key {print $2}' "$INI_FILE" | tr -d '\r\n' | xargs
 }
 
 REPO_URL=$(read_ini_by_key "REPO_URL")
@@ -39,7 +39,7 @@ BUILD_DIR="$BASE_PATH/../action_build"
 echo $REPO_URL $REPO_BRANCH
 # Write flag one level up from wrt_core (repo root usually)
 echo "$REPO_URL/$REPO_BRANCH" >"$BASE_PATH/../repo_flag"
-git clone --depth 1 -b $REPO_BRANCH $REPO_URL $BUILD_DIR
+git clone --depth 1 -b "$REPO_BRANCH" "$REPO_URL" "$BUILD_DIR"
 
 # GitHub Action 移除国内下载源
 PROJECT_MIRRORS_FILE="$BUILD_DIR/scripts/projectsmirrors.json"
