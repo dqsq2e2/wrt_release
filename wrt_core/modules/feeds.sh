@@ -13,6 +13,22 @@ update_feeds() {
         echo "src-git small8 https://github.com/kenzok8/jell" >>"$FEEDS_PATH"
     fi
 
+    # iStore official feeds
+    if ! grep -q "linkease/nas-packages.git" "$FEEDS_PATH"; then
+        [ -z "$(tail -c 1 "$FEEDS_PATH")" ] || echo "" >>"$FEEDS_PATH"
+        echo "src-git nas https://github.com/linkease/nas-packages.git;master" >>"$FEEDS_PATH"
+    fi
+
+    if ! grep -q "linkease/nas-packages-luci.git" "$FEEDS_PATH"; then
+        [ -z "$(tail -c 1 "$FEEDS_PATH")" ] || echo "" >>"$FEEDS_PATH"
+        echo "src-git nas_luci https://github.com/linkease/nas-packages-luci.git;main" >>"$FEEDS_PATH"
+    fi
+
+    if ! grep -q "linkease/istore" "$FEEDS_PATH"; then
+        [ -z "$(tail -c 1 "$FEEDS_PATH")" ] || echo "" >>"$FEEDS_PATH"
+        echo "src-git istore https://github.com/linkease/istore;main" >>"$FEEDS_PATH"
+    fi
+
     if ! grep -q "openwrt-passwall" "$FEEDS_PATH"; then
         [ -z "$(tail -c 1 "$FEEDS_PATH")" ] || echo "" >>"$FEEDS_PATH"
         echo "src-git passwall https://github.com/Openwrt-Passwall/openwrt-passwall;main" >>"$FEEDS_PATH"
@@ -51,6 +67,9 @@ install_feeds() {
                 install_passwall
             elif [[ $(basename "$dir") == "nikki" ]]; then
                 install_nikki
+            elif [[ $(basename "$dir") == "nas" ]] || [[ $(basename "$dir") == "nas_luci" ]] || [[ $(basename "$dir") == "istore" ]]; then
+                # Install iStore feeds
+                ./scripts/feeds install -f -ap $(basename "$dir")
             else
                 ./scripts/feeds install -f -ap $(basename "$dir")
             fi

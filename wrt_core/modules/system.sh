@@ -46,6 +46,48 @@ fix_kconfig_recursive_dependency() {
     fi
 }
 
+remove_wifi_menu() {
+    # Remove WiFi menu from LuCI
+    local luci_network_controller="$BUILD_DIR/feeds/luci/modules/luci-mod-network/htdocs/luci-static/resources/view/network"
+    
+    if [ -d "$luci_network_controller" ]; then
+        # Remove wireless.js to disable WiFi interface
+        rm -f "$luci_network_controller/wireless.js" 2>/dev/null
+        echo "已移除 LuCI WiFi 界面文件"
+    fi
+    
+    # Remove WiFi menu entry
+    local luci_network_menu="$BUILD_DIR/feeds/luci/modules/luci-mod-network/root/usr/share/luci/menu.d/luci-mod-network.json"
+    
+    if [ -f "$luci_network_menu" ]; then
+        # Backup original
+        cp "$luci_network_menu" "$luci_network_menu.bak"
+        
+        # Remove wireless entries from menu
+        sed -i '/wireless/d' "$luci_network_menu"
+        echo "已从 LuCI 菜单中移除 WiFi 选项"
+    fi
+}
+
+fix_natmap_makefile() {
+    local natmap_makefile="$BUILD_DIR/feeds/small8/luci-app-natmap/Makefile"
+    
+    if [ -f "$natmap_makefile" ]; then
+        echo "正在修复 luci-app-natmap Makefile..."
+        
+        # 修复 PKG_VERSION 和 PKG_RELEASE 格式
+        sed -i 's/PKG_VERSION:=.*$/PKG_VERSION:=1.0.0/' "$natmap_makefile"
+        sed -i 's/PKG_RELEASE:=.*$/PKG_RELEASE:=1/' "$natmap_makefile"
+        
+        # 如果没有 PKG_RELEASE，添加它
+        if ! grep -q "PKG_RELEASE" "$natmap_makefile"; then
+            sed -i '/PKG_VERSION/a PKG_RELEASE:=1' "$natmap_makefile"
+        fi
+        
+        echo "已修复 luci-app-natmap Makefile"
+    fi
+}
+
 update_default_lan_addr() {
     local CFG_PATH="$BUILD_DIR/package/base-files/files/bin/config_generate"
     if [ -f $CFG_PATH ]; then

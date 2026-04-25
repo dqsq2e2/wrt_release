@@ -50,6 +50,8 @@ main() {
     update_golang
     change_dnsmasq2full
     fix_mk_def_depends
+    remove_wifi_menu
+    fix_natmap_makefile
 
     update_default_lan_addr
     remove_something_nss_kmod
