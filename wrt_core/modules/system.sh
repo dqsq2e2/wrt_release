@@ -88,6 +88,26 @@ fix_natmap_makefile() {
     fi
 }
 
+fix_rstrip_script() {
+    local rstrip_script="$BUILD_DIR/scripts/rstrip.sh"
+    
+    if [ -f "$rstrip_script" ]; then
+        echo "正在修复 rstrip.sh 脚本..."
+        
+        # 备份原文件
+        cp "$rstrip_script" "$rstrip_script.bak"
+        
+        # 修复：跳过 shared object 和 relocatable 文件
+        sed -i '/file.*\$F.*grep.*ELF/a\
+        # Skip shared objects and relocatable files\
+        if file "$F" | grep -q "shared object\\|relocatable"; then\
+            continue\
+        fi' "$rstrip_script"
+        
+        echo "已修复 rstrip.sh 脚本"
+    fi
+}
+
 update_default_lan_addr() {
     local CFG_PATH="$BUILD_DIR/package/base-files/files/bin/config_generate"
     if [ -f $CFG_PATH ]; then
