@@ -377,19 +377,6 @@ EOF
     echo "=========================================="
     echo ""
 fi
-CONFIG_PACKAGE_kmod-ipt-conntrack=n
-CONFIG_PACKAGE_kmod-ipt-extra=n
-CONFIG_PACKAGE_kmod-nft-compat=n
-CONFIG_PACKAGE_iptables-mod-extra=n
-CONFIG_PACKAGE_iptables=n
-CONFIG_PACKAGE_iptables-legacy=n
-CONFIG_PACKAGE_ip6tables=n
-CONFIG_PACKAGE_ip6tables-legacy=n
-EOF
-    
-    echo "✅ 已强制覆盖 iptables 配置"
-    echo ""
-fi
 
 # 在配置生成后，检查是否需要移除 WiFi 界面
 source "$BASE_PATH/modules/system.sh"
