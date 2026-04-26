@@ -187,8 +187,86 @@ apply_config() {
 
     # 只有在配置文件中启用了 Docker 时才加载 docker_deps.config
     if grep -q "CONFIG_PACKAGE_dockerd=y" "$BASE_PATH/../$BUILD_DIR/.config"; then
-        cat "$BASE_PATH/deconfig/docker_deps.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
         echo "检测到 Docker 已启用，加载 docker_deps.config"
+        cat "$BASE_PATH/deconfig/docker_deps.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
+        
+        # 在 defconfig 之前就强制禁用冲突包（关键！）
+        echo "预先禁用与 Docker v29 冲突的 iptables 模块..."
+        
+        # 先删除所有相关配置行（避免重复）
+        sed -i '/^CONFIG_PACKAGE_iptables-nft=/d' "$BASE_PATH/../$BUILD_DIR/.config"
+        sed -i '/^CONFIG_PACKAGE_ip6tables-nft=/d' "$BASE_PATH/../$BUILD_DIR/.config"
+        sed -i '/^CONFIG_PACKAGE_xtables-nft=/d' "$BASE_PATH/../$BUILD_DIR/.config"
+        sed -i '/^CONFIG_PACKAGE_kmod-ipt-nat=/d' "$BASE_PATH/../$BUILD_DIR/.config"
+        sed -i '/^CONFIG_PACKAGE_kmod-ipt-nat6=/d' "$BASE_PATH/../$BUILD_DIR/.config"
+        sed -i '/^CONFIG_PACKAGE_kmod-nf-ipt=/d' "$BASE_PATH/../$BUILD_DIR/.config"
+        sed -i '/^CONFIG_PACKAGE_kmod-nf-ipt6=/d' "$BASE_PATH/../$BUILD_DIR/.config"
+        sed -i '/^CONFIG_PACKAGE_kmod-ipt-core=/d' "$BASE_PATH/../$BUILD_DIR/.config"
+        
+        # 然后追加强制禁用配置
+        cat >> "$BASE_PATH/../$BUILD_DIR/.config" << 'EOF'
+
+# ========================================
+# Docker v29 + OpenClash nftables 配置
+# 必须在 make defconfig 之前设置
+# ========================================
+
+# 强制启用 firewall4 和 nftables 支持（OpenClash 条件依赖需要）
+CONFIG_PACKAGE_firewall4=y
+CONFIG_PACKAGE_kmod-nft-fib=y
+CONFIG_PACKAGE_kmod-nft-nat=y
+CONFIG_PACKAGE_kmod-nft-offload=y
+CONFIG_PACKAGE_kmod-nft-queue=y
+CONFIG_PACKAGE_kmod-nft-tproxy=y
+CONFIG_PACKAGE_kmod-nft-socket=y
+CONFIG_PACKAGE_nftables=y
+
+# 禁用 iptables-nft（它依赖 kmod-ipt-core，导致冲突）
+CONFIG_PACKAGE_iptables-nft=n
+CONFIG_PACKAGE_ip6tables-nft=n
+CONFIG_PACKAGE_xtables-nft=n
+
+# 禁用 firewall3 (iptables)
+CONFIG_PACKAGE_firewall=n
+
+# 关键：禁用传统 iptables 包（它会拉入所有 iptables 内核模块）
+# iptables 包依赖: kmod-ipt-core, kmod-ipt-nat, kmod-nft-compat 等
+CONFIG_PACKAGE_iptables=n
+CONFIG_PACKAGE_iptables-legacy=n
+CONFIG_PACKAGE_ip6tables=n
+CONFIG_PACKAGE_ip6tables-legacy=n
+CONFIG_PACKAGE_iptables-zz-legacy=n
+
+# 强制禁用冲突的 iptables 内核模块
+CONFIG_PACKAGE_kmod-ipt-nat=n
+CONFIG_PACKAGE_kmod-ipt-nat6=n
+CONFIG_PACKAGE_kmod-ipt-physdev=n
+CONFIG_PACKAGE_kmod-nf-ipt=n
+CONFIG_PACKAGE_kmod-nf-ipt6=n
+CONFIG_PACKAGE_kmod-ipt-core=n
+CONFIG_PACKAGE_kmod-ipt-conntrack=n
+CONFIG_PACKAGE_kmod-ipt-conntrack-extra=n
+CONFIG_PACKAGE_kmod-ipt-extra=n
+CONFIG_PACKAGE_kmod-ipt-filter=n
+CONFIG_PACKAGE_kmod-ipt-fullconenat=n
+CONFIG_PACKAGE_kmod-ipt-ipopt=n
+CONFIG_PACKAGE_kmod-ipt-iprange=n
+CONFIG_PACKAGE_kmod-ipt-nat-extra=n
+CONFIG_PACKAGE_kmod-ipt-offload=n
+CONFIG_PACKAGE_kmod-ipt-raw=n
+CONFIG_PACKAGE_kmod-ipt-raw6=n
+CONFIG_PACKAGE_kmod-ipt-tproxy=n
+CONFIG_PACKAGE_kmod-nft-compat=n
+
+# 禁用 iptables-mod-* 包
+CONFIG_PACKAGE_iptables-mod-extra=n
+CONFIG_PACKAGE_iptables-mod-conntrack-extra=n
+CONFIG_PACKAGE_iptables-mod-filter=n
+CONFIG_PACKAGE_iptables-mod-ipopt=n
+CONFIG_PACKAGE_iptables-mod-tproxy=n
+CONFIG_PACKAGE_iptables-mod-socket=n
+CONFIG_PACKAGE_iptables-mod-iprange=n
+EOF
     else
         echo "Docker 未启用，跳过 docker_deps.config"
     fi
@@ -214,12 +292,135 @@ remove_uhttpd_dependency
 
 cd "$BASE_PATH/../$BUILD_DIR"
 
+# 验证 apply_config 后的配置（defconfig 之前）
+echo ""
+echo "=========================================="
+echo "验证 apply_config 后的配置（defconfig 之前）"
+echo "=========================================="
+echo "iptables-nft: $(grep '^CONFIG_PACKAGE_iptables-nft=' .config || echo '未设置')"
+echo "kmod-ipt-nat: $(grep '^CONFIG_PACKAGE_kmod-ipt-nat=' .config || echo '未设置')"
+echo "firewall4: $(grep '^CONFIG_PACKAGE_firewall4=' .config || echo '未设置')"
+echo "=========================================="
+echo ""
+
 # 运行 defconfig 生成完整配置
 make defconfig
+
+# 验证关键配置是否生效（defconfig 之后）
+echo ""
+echo "=========================================="
+echo "验证 defconfig 后的配置"
+echo "=========================================="
+echo "firewall4: $(grep '^CONFIG_PACKAGE_firewall4=' .config || echo '未设置')"
+echo "iptables: $(grep '^CONFIG_PACKAGE_iptables=' .config || echo '未设置')"
+echo "iptables-nft: $(grep '^CONFIG_PACKAGE_iptables-nft=' .config || echo '未设置')"
+echo "kmod-ipt-nat: $(grep '^CONFIG_PACKAGE_kmod-ipt-nat=' .config || echo '未设置')"
+echo "kmod-nft-nat: $(grep '^CONFIG_PACKAGE_kmod-nft-nat=' .config || echo '未设置')"
+echo "=========================================="
+echo ""
+
+# 如果启用了 Docker，在 defconfig 后强制覆盖冲突的 iptables 模块
+if grep -q "CONFIG_PACKAGE_dockerd=y" .config; then
+    echo "检测到 Docker 已启用，强制覆盖 iptables 冲突模块..."
+    
+    # 删除所有冲突的 iptables 配置行
+    sed -i '/^CONFIG_PACKAGE_iptables-nft=/d' .config
+    sed -i '/^CONFIG_PACKAGE_ip6tables-nft=/d' .config
+    sed -i '/^CONFIG_PACKAGE_xtables-nft=/d' .config
+    sed -i '/^CONFIG_PACKAGE_kmod-ipt-nat=/d' .config
+    sed -i '/^CONFIG_PACKAGE_kmod-ipt-nat6=/d' .config
+    sed -i '/^CONFIG_PACKAGE_kmod-ipt-physdev=/d' .config
+    sed -i '/^CONFIG_PACKAGE_kmod-nf-ipt=/d' .config
+    sed -i '/^CONFIG_PACKAGE_kmod-nf-ipt6=/d' .config
+    sed -i '/^CONFIG_PACKAGE_kmod-ipt-core=/d' .config
+    sed -i '/^CONFIG_PACKAGE_kmod-ipt-conntrack=/d' .config
+    sed -i '/^CONFIG_PACKAGE_kmod-ipt-extra=/d' .config
+    sed -i '/^CONFIG_PACKAGE_kmod-nft-compat=/d' .config
+    sed -i '/^CONFIG_PACKAGE_iptables-mod-extra=/d' .config
+    sed -i '/^CONFIG_PACKAGE_iptables=/d' .config
+    sed -i '/^CONFIG_PACKAGE_iptables-legacy=/d' .config
+    sed -i '/^CONFIG_PACKAGE_ip6tables=/d' .config
+    sed -i '/^CONFIG_PACKAGE_ip6tables-legacy=/d' .config
+    
+    # 追加强制禁用配置
+    cat >> .config << 'EOF'
+# Docker v29 nftables - 强制禁用（defconfig 后覆盖）
+CONFIG_PACKAGE_iptables-nft=n
+CONFIG_PACKAGE_ip6tables-nft=n
+CONFIG_PACKAGE_xtables-nft=n
+CONFIG_PACKAGE_kmod-ipt-nat=n
+CONFIG_PACKAGE_kmod-ipt-nat6=n
+CONFIG_PACKAGE_kmod-ipt-physdev=n
+CONFIG_PACKAGE_kmod-nf-ipt=n
+CONFIG_PACKAGE_kmod-nf-ipt6=n
+CONFIG_PACKAGE_kmod-ipt-core=n
+CONFIG_PACKAGE_kmod-ipt-conntrack=n
+CONFIG_PACKAGE_kmod-ipt-extra=n
+CONFIG_PACKAGE_kmod-nft-compat=n
+CONFIG_PACKAGE_iptables-mod-extra=n
+CONFIG_PACKAGE_iptables=n
+CONFIG_PACKAGE_iptables-legacy=n
+CONFIG_PACKAGE_ip6tables=n
+CONFIG_PACKAGE_ip6tables-legacy=n
+EOF
+    
+    echo "✅ 已强制覆盖 iptables 配置"
+    
+    # 验证覆盖后的配置
+    echo ""
+    echo "=========================================="
+    echo "验证强制覆盖后的配置"
+    echo "=========================================="
+    echo "iptables-nft: $(grep '^CONFIG_PACKAGE_iptables-nft=' .config || echo '未设置')"
+    echo "kmod-ipt-nat: $(grep '^CONFIG_PACKAGE_kmod-ipt-nat=' .config || echo '未设置')"
+    echo "kmod-ipt-core: $(grep '^CONFIG_PACKAGE_kmod-ipt-core=' .config || echo '未设置')"
+    echo "=========================================="
+    echo ""
+fi
+CONFIG_PACKAGE_kmod-ipt-conntrack=n
+CONFIG_PACKAGE_kmod-ipt-extra=n
+CONFIG_PACKAGE_kmod-nft-compat=n
+CONFIG_PACKAGE_iptables-mod-extra=n
+CONFIG_PACKAGE_iptables=n
+CONFIG_PACKAGE_iptables-legacy=n
+CONFIG_PACKAGE_ip6tables=n
+CONFIG_PACKAGE_ip6tables-legacy=n
+EOF
+    
+    echo "✅ 已强制覆盖 iptables 配置"
+    echo ""
+fi
 
 # 在配置生成后，检查是否需要移除 WiFi 界面
 source "$BASE_PATH/modules/system.sh"
 remove_wifi_menu
+
+# 检查 iptables/nftables 冲突（Docker v29 兼容性）
+check_iptables_conflicts || {
+    echo ""
+    echo "❌ 错误：iptables 冲突未解决"
+    echo ""
+    echo "正在运行精确追踪脚本，找出罪魁祸首..."
+    echo ""
+    
+    # 运行精确追踪脚本
+    if [ -f "$BASE_PATH/scripts/find_iptables_culprit.sh" ]; then
+        chmod +x "$BASE_PATH/scripts/find_iptables_culprit.sh"
+        "$BASE_PATH/scripts/find_iptables_culprit.sh" "$BASE_PATH/../$BUILD_DIR" | tee /tmp/iptables_culprit.log
+        echo ""
+        echo "追踪日志已保存到: /tmp/iptables_culprit.log"
+    fi
+    
+    echo ""
+    echo "这通常是因为某些包的依赖强制启用了 iptables 模块。"
+    echo ""
+    read -p "是否继续编译？(y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "编译已取消"
+        exit 1
+    fi
+}
 
 # 检查 iStore 核心组件是否被禁用
 echo "正在检查 iStore 核心组件状态..."

@@ -813,7 +813,8 @@ remove_tweaked_packages() {
 
 
 enable_turboacc_by_default() {
-    local turboacc_config="$BUILD_DIR/feeds/small8/luci-app-turboacc-mtk/root/etc/config/turboacc"
+    # TurboACC 配置文件路径（注意：不是 luci-app-turboacc-mtk）
+    local turboacc_config="$BUILD_DIR/feeds/small8/luci-app-turboacc/root/etc/config/turboacc"
     
     if [ -f "$turboacc_config" ]; then
         echo "正在设置 TurboACC 默认启用..."
@@ -824,5 +825,123 @@ enable_turboacc_by_default() {
         echo "TurboACC 已设置为默认启用"
     else
         echo "警告：未找到 TurboACC 配置文件: $turboacc_config" >&2
+    fi
+}
+
+check_iptables_conflicts() {
+    local config_file=".config"
+    
+    # 如果在其他目录调用，使用完整路径
+    if [ ! -f "$config_file" ] && [ -n "$BUILD_DIR" ]; then
+        config_file="$BUILD_DIR/.config"
+    fi
+    
+    # 如果 .config 还不存在，跳过检查
+    if [ ! -f "$config_file" ]; then
+        echo "跳过 iptables 冲突检查（配置文件尚未生成）"
+        return 0
+    fi
+    
+    echo "=========================================="
+    echo "检查 iptables/nftables 冲突"
+    echo "=========================================="
+    
+    local has_docker=0
+    local has_conflict=0
+    local conflict_packages=()
+    
+    # 检查是否启用了 Docker
+    if grep -q "^CONFIG_PACKAGE_dockerd=y" "$config_file"; then
+        has_docker=1
+        echo "✓ 检测到 Docker 已启用"
+    fi
+    
+    # 如果没有启用 Docker，跳过检查
+    if [ $has_docker -eq 0 ]; then
+        echo "Docker 未启用，跳过 iptables 冲突检查"
+        echo "=========================================="
+        return 0
+    fi
+    
+    # 定义冲突的 iptables 包列表
+    local conflict_list=(
+        "kmod-ipt-nat"
+        "kmod-ipt-nat6"
+        "kmod-ipt-physdev"
+        "kmod-nf-ipt"
+        "kmod-nf-ipt6"
+        "kmod-ipt-core"
+        "kmod-ipt-conntrack"
+        "kmod-ipt-extra"
+        "kmod-ipt-filter"
+        "kmod-ipt-fullconenat"
+        "kmod-ipt-offload"
+        "kmod-ipt-raw"
+        "kmod-ipt-raw6"
+        "kmod-ipt-tproxy"
+        "kmod-nft-compat"
+        "iptables-mod-extra"
+        "iptables"
+        "iptables-legacy"
+        "ip6tables"
+        "ip6tables-legacy"
+    )
+    
+    # 检查每个冲突包
+    for pkg in "${conflict_list[@]}"; do
+        # 检查是否被启用（=y 或没有被明确禁用）
+        if grep -q "^CONFIG_PACKAGE_${pkg}=y" "$config_file"; then
+            has_conflict=1
+            conflict_packages+=("$pkg (已启用)")
+        elif ! grep -q "^CONFIG_PACKAGE_${pkg}=n" "$config_file" && \
+             ! grep -q "^# CONFIG_PACKAGE_${pkg} is not set" "$config_file"; then
+            # 如果既没有 =y 也没有 =n 或 is not set，说明可能会被依赖拉入
+            has_conflict=1
+            conflict_packages+=("$pkg (未明确禁用)")
+        fi
+    done
+    
+    # 检查必需的 nftables 支持
+    local has_nftables=0
+    if grep -q "^CONFIG_PACKAGE_nftables=y" "$config_file" && \
+       grep -q "^CONFIG_PACKAGE_iptables-nft=y" "$config_file"; then
+        has_nftables=1
+        echo "✓ nftables 支持已启用"
+        echo "✓ iptables-nft 兼容层已启用"
+    elif grep -q "^CONFIG_PACKAGE_iptables-nft=y" "$config_file"; then
+        has_nftables=1
+        echo "✓ iptables-nft 兼容层已启用"
+        if ! grep -q "^CONFIG_PACKAGE_nftables=y" "$config_file"; then
+            echo "⚠️  nftables 用户空间工具未启用（但 iptables-nft 已启用，可以工作）"
+        fi
+    else
+        echo "⚠️  警告：nftables 或 iptables-nft 未启用"
+    fi
+    
+    # 输出检查结果
+    if [ $has_conflict -eq 1 ]; then
+        echo ""
+        echo "❌ 错误：检测到与 Docker v29 nftables 冲突的 iptables 模块！"
+        echo ""
+        echo "冲突的包："
+        for pkg in "${conflict_packages[@]}"; do
+            echo "  - $pkg"
+        done
+        echo ""
+        echo "解决方案："
+        echo "1. 确保 docker_deps.config 已正确加载"
+        echo "2. 检查设备配置文件是否启用了冲突的包"
+        echo "3. 运行 'make defconfig' 后这些包应该被禁用"
+        echo ""
+        echo "Docker v29 使用纯 nftables 后端，不兼容传统 iptables 模块。"
+        echo "OpenClash 也使用 nftables，两者可以通过 iptables-nft 兼容层共存。"
+        echo "=========================================="
+        return 1
+    else
+        echo ""
+        echo "✅ 未检测到 iptables/nftables 冲突"
+        echo "✅ Docker v29 + OpenClash 配置正确"
+        echo "=========================================="
+        return 0
     fi
 }

@@ -89,9 +89,9 @@ main() {
     fix_easytier_mk
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
-    enable_turboacc_by_default  # 设置 TurboACC 默认启用
     install_feeds
     fix_quickstart  # 移到 install_feeds 之后，避免被覆盖
+    enable_turboacc_by_default  # 设置 TurboACC 默认启用（必须在 install_feeds 之后）
     update_docker_stack
     fix_cups_libcups_avahi_depends
     fix_easytier_lua
