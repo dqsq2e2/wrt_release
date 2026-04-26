@@ -846,6 +846,42 @@ enable_turboacc_by_default() {
     else
         echo "警告：未找到 TurboACC 配置文件: $turboacc_config" >&2
     fi
+    
+    # 确保 mtkhnat 内核模块自动加载
+    local modules_d_dir="$BUILD_DIR/package/base-files/files/etc/modules.d"
+    if [ ! -d "$modules_d_dir" ]; then
+        mkdir -p "$modules_d_dir"
+    fi
+    
+    # 创建模块自动加载配置
+    echo "# MediaTek Hardware NAT" > "$modules_d_dir/60-mtkhnat"
+    echo "mtkhnat" >> "$modules_d_dir/60-mtkhnat"
+    echo "已配置 mtkhnat 内核模块自动加载"
+    
+    # 创建 uci-defaults 脚本确保 TurboACC 服务启动
+    local uci_defaults_dir="$BUILD_DIR/package/base-files/files/etc/uci-defaults"
+    if [ ! -d "$uci_defaults_dir" ]; then
+        mkdir -p "$uci_defaults_dir"
+    fi
+    
+    cat > "$uci_defaults_dir/95-turboacc-enable" << 'EOF'
+#!/bin/sh
+# 确保 TurboACC 服务启用并启动（不修改配置，配置已在编译时设置）
+
+# 启用 TurboACC 服务
+/etc/init.d/turboacc enable
+
+# 加载 mtkhnat 模块（双重保险，防止自动加载失败）
+modprobe mtkhnat 2>/dev/null || true
+
+# 启动 TurboACC 服务
+/etc/init.d/turboacc start
+
+exit 0
+EOF
+    
+    chmod +x "$uci_defaults_dir/95-turboacc-enable"
+    echo "已创建 TurboACC 自动启用脚本"
 }
 
 check_iptables_conflicts() {
