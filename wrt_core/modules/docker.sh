@@ -236,6 +236,60 @@ _docker_stack_update_dockerd_depends_block() {
     mv "$tmp_path" "$mk_path"
 }
 
+# V佬源码专用：不添加 iptables 依赖的版本
+_docker_stack_update_dockerd_depends_block_vikingyfy() {
+    local mk_path="$1"
+    local tmp_path=""
+
+    tmp_path=$(mktemp) || {
+        echo "错误：创建临时文件失败" >&2
+        return 1
+    }
+
+    awk '
+        BEGIN {
+            in_depends = 0
+            replaced = 0
+        }
+        /^  DEPENDS:=\$\(GO_ARCH_DEPENDS\) \\$/ {
+            in_depends = 1
+            replaced = 1
+
+            print "  DEPENDS:=$(GO_ARCH_DEPENDS) \\" 
+            print "    +ca-certificates \\" 
+            print "    +containerd \\" 
+            print "    +KERNEL_SECCOMP:libseccomp \\" 
+            print "    +kmod-veth \\" 
+            print "    +nftables \\" 
+            print "    +kmod-nft-nat \\" 
+            print "    +tini \\" 
+            print "    +uci-firewall \\" 
+            print "    @!(mips||mips64||mipsel)"
+            next
+        }
+        in_depends {
+            if ($0 ~ /@!\(mips\|\|mips64\|\|mipsel\)/) {
+                in_depends = 0
+            }
+            next
+        }
+        {
+            print
+        }
+        END {
+            if (replaced == 0) {
+                exit 2
+            }
+        }
+    ' "$mk_path" > "$tmp_path" || {
+        rm -f "$tmp_path"
+        echo "错误：未能重写 $mk_path 的 DEPENDS 块" >&2
+        return 1
+    }
+
+    mv "$tmp_path" "$mk_path"
+}
+
 _docker_stack_fix_dockerd_vendored_checks() {
     local mk_path="$1"
     local tmp_path=""
@@ -972,7 +1026,14 @@ _docker_stack_update_dockerd_nftables_defaults() {
         return 0
     fi
 
-    _docker_stack_update_dockerd_depends_block "$dockerd_makefile" || return 1
+    # 根据源码类型选择不同的依赖更新策略
+    if [[ "${REPO_URL:-}" == *"VIKINGYFY"* ]] || [[ "${REPO_URL:-}" == *"immortalwrt"* && "${REPO_URL:-}" != *"immortalwrt-mt798x-rebase"* ]]; then
+        echo "检测到 V佬源码，使用纯 nftables 依赖（不包含 iptables 兼容层）"
+        _docker_stack_update_dockerd_depends_block_vikingyfy "$dockerd_makefile" || return 1
+    else
+        echo "检测到 C佬源码，使用完整依赖（包含 iptables 兼容层）"
+        _docker_stack_update_dockerd_depends_block "$dockerd_makefile" || return 1
+    fi
     _docker_stack_fix_dockerd_vendored_checks "$dockerd_makefile" || return 1
 
     _docker_stack_ensure_nftables_init_support "$dockerd_init" || return 1
