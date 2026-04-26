@@ -62,10 +62,47 @@ remove_wifi_menu() {
         return 0
     fi
     
-    # 检查是否禁用了 WiFi 包
-    if grep -q "CONFIG_PACKAGE_hostapd-common=n" "$config_file" || \
-       grep -q "CONFIG_PACKAGE_wpad.*=n" "$config_file" || \
-       grep -q "CONFIG_PACKAGE_iw=n" "$config_file"; then
+    echo "=========================================="
+    echo "调试：检查 WiFi 配置状态"
+    echo "配置文件路径: $config_file"
+    echo "=========================================="
+    
+    # 显示相关配置行
+    echo "hostapd-common 配置:"
+    grep "CONFIG_PACKAGE_hostapd-common" "$config_file" || echo "  未找到 hostapd-common 配置"
+    
+    echo "iw 配置:"
+    grep "CONFIG_PACKAGE_iw" "$config_file" || echo "  未找到 iw 配置"
+    
+    echo "iwinfo 配置:"
+    grep "CONFIG_PACKAGE_iwinfo" "$config_file" || echo "  未找到 iwinfo 配置"
+    
+    echo "=========================================="
+    
+    # 检查是否禁用了 WiFi 包（使用更精确的匹配）
+    # 检查 hostapd-common=n 或 iw=n 或 iwinfo=n
+    # 注意：defconfig 可能会将 =n 转换为 "is not set"
+    local wifi_disabled=0
+    
+    if grep -q "^CONFIG_PACKAGE_hostapd-common=n" "$config_file" || \
+       grep -q "^# CONFIG_PACKAGE_hostapd-common is not set" "$config_file"; then
+        echo "✓ hostapd-common 已禁用"
+        wifi_disabled=1
+    fi
+    
+    if grep -q "^CONFIG_PACKAGE_iw=n" "$config_file" || \
+       grep -q "^# CONFIG_PACKAGE_iw is not set" "$config_file"; then
+        echo "✓ iw 已禁用"
+        wifi_disabled=1
+    fi
+    
+    if grep -q "^CONFIG_PACKAGE_iwinfo=n" "$config_file" || \
+       grep -q "^# CONFIG_PACKAGE_iwinfo is not set" "$config_file"; then
+        echo "✓ iwinfo 已禁用"
+        wifi_disabled=1
+    fi
+    
+    if [ $wifi_disabled -eq 1 ]; then
         echo "检测到 WiFi 已禁用，正在移除 WiFi 界面..."
     else
         echo "检测到 WiFi 已启用，保留 WiFi 界面"
