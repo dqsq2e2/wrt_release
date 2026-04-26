@@ -80,32 +80,30 @@ remove_wifi_menu() {
     echo "=========================================="
     
     # 检查是否禁用了 WiFi 包（使用更精确的匹配）
-    # 检查 hostapd-common=n 或 iw=n 或 iwinfo=n
-    # 注意：defconfig 可能会将 =n 转换为 "is not set"
-    local wifi_disabled=0
+    # 只有当 hostapd-common 和 iw 都被禁用时，才认为 WiFi 被禁用
+    # iwinfo 只是查询工具，不是 WiFi 驱动，不能作为判断依据
+    local hostapd_disabled=0
+    local iw_disabled=0
     
     if grep -q "^CONFIG_PACKAGE_hostapd-common=n" "$config_file" || \
        grep -q "^# CONFIG_PACKAGE_hostapd-common is not set" "$config_file"; then
         echo "✓ hostapd-common 已禁用"
-        wifi_disabled=1
+        hostapd_disabled=1
     fi
     
     if grep -q "^CONFIG_PACKAGE_iw=n" "$config_file" || \
        grep -q "^# CONFIG_PACKAGE_iw is not set" "$config_file"; then
         echo "✓ iw 已禁用"
-        wifi_disabled=1
+        iw_disabled=1
     fi
     
-    if grep -q "^CONFIG_PACKAGE_iwinfo=n" "$config_file" || \
-       grep -q "^# CONFIG_PACKAGE_iwinfo is not set" "$config_file"; then
-        echo "✓ iwinfo 已禁用"
-        wifi_disabled=1
-    fi
-    
-    if [ $wifi_disabled -eq 1 ]; then
-        echo "检测到 WiFi 已禁用，正在移除 WiFi 界面..."
+    # 只有当 hostapd-common 和 iw 都被禁用时，才移除 WiFi 界面
+    if [ $hostapd_disabled -eq 1 ] && [ $iw_disabled -eq 1 ]; then
+        echo "检测到 WiFi 已禁用（hostapd-common 和 iw 都被禁用），正在移除 WiFi 界面..."
     else
         echo "检测到 WiFi 已启用，保留 WiFi 界面"
+        echo "  - hostapd-common: $([ $hostapd_disabled -eq 0 ] && echo '启用' || echo '禁用')"
+        echo "  - iw: $([ $iw_disabled -eq 0 ] && echo '启用' || echo '禁用')"
         return 0
     fi
     
