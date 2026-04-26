@@ -12,6 +12,7 @@ on:
         options:
           - aliyun_ap8220_immwrt
           - clx_s20p_nowifi_immwrt
+          - clx_s20p_immwrt
           - cmcc_rax3000m_immwrt
           - gemtek_w1701k_immwrt
           - jdcloud_ax6000_immwrt
