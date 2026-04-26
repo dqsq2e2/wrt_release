@@ -49,12 +49,15 @@ fix_kconfig_recursive_dependency() {
 remove_wifi_menu() {
     # 检查配置文件中是否禁用了 WiFi
     # 如果配置中有 CONFIG_PACKAGE_hostapd-common=n 或 CONFIG_PACKAGE_wpad-*=n，说明禁用了 WiFi
-    local config_file="$BUILD_DIR/.config"
+    local config_file=".config"
     
-    # 如果 .config 还不存在，检查源配置文件
+    # 如果在 update.sh 中调用，需要使用完整路径
+    if [ ! -f "$config_file" ] && [ -n "$BUILD_DIR" ]; then
+        config_file="$BUILD_DIR/.config"
+    fi
+    
+    # 如果 .config 还不存在，跳过
     if [ ! -f "$config_file" ]; then
-        # 尝试从环境变量或参数获取配置文件名
-        # 这个阶段 .config 还没生成，所以跳过
         echo "跳过 WiFi 菜单移除（配置文件尚未生成）"
         return 0
     fi
@@ -71,6 +74,11 @@ remove_wifi_menu() {
     
     # 安全地移除 WiFi 菜单项，不破坏其他网络配置
     local luci_network_menu="$BUILD_DIR/feeds/luci/modules/luci-mod-network/root/usr/share/luci/menu.d/luci-mod-network.json"
+    
+    # 如果当前已经在 BUILD_DIR 中，使用相对路径
+    if [ ! -f "$luci_network_menu" ]; then
+        luci_network_menu="feeds/luci/modules/luci-mod-network/root/usr/share/luci/menu.d/luci-mod-network.json"
+    fi
     
     if [ -f "$luci_network_menu" ]; then
         echo "正在从 LuCI 菜单中移除 WiFi 选项..."
@@ -94,7 +102,11 @@ remove_wifi_menu() {
     fi
     
     # 可选：创建一个 uci-defaults 脚本在运行时隐藏 WiFi 界面
-    local uci_defaults_dir="$BUILD_DIR/package/base-files/files/etc/uci-defaults"
+    local uci_defaults_dir="package/base-files/files/etc/uci-defaults"
+    if [ ! -d "$uci_defaults_dir" ] && [ -n "$BUILD_DIR" ]; then
+        uci_defaults_dir="$BUILD_DIR/package/base-files/files/etc/uci-defaults"
+    fi
+    
     if [ -d "$uci_defaults_dir" ]; then
         cat > "$uci_defaults_dir/99-hide-wifi-menu" << 'EOF'
 #!/bin/sh
@@ -110,7 +122,11 @@ EOF
     fi
     
     # 添加 CSS 隐藏 WiFi 相关元素（额外保险）
-    local custom_css_dir="$BUILD_DIR/package/base-files/files/www/luci-static"
+    local custom_css_dir="package/base-files/files/www/luci-static"
+    if [ ! -d "$custom_css_dir" ] && [ -n "$BUILD_DIR" ]; then
+        custom_css_dir="$BUILD_DIR/package/base-files/files/www/luci-static"
+    fi
+    
     if [ ! -d "$custom_css_dir" ]; then
         mkdir -p "$custom_css_dir"
     fi
