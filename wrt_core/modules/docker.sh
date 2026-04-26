@@ -1196,3 +1196,40 @@ update_docker_stack() {
 
     return 0
 }
+
+# 检查 Docker 兼容性，VIKINGYFY 源码不支持 Docker v29 nftables
+check_docker_compatibility() {
+    local build_dir="${BUILD_DIR:-}"
+    
+    if [ -z "$build_dir" ]; then
+        echo "错误：check_docker_compatibility 需要 BUILD_DIR" >&2
+        return 1
+    fi
+    
+    # 检查是否启用了 Docker
+    local config_file="$build_dir/.config"
+    if [ -f "$config_file" ]; then
+        if grep -q "CONFIG_PACKAGE_dockerd=y" "$config_file" || \
+           grep -q "CONFIG_PACKAGE_luci-app-dockerman=y" "$config_file"; then
+            
+            echo ""
+            echo "=========================================="
+            echo "⚠️  Docker 兼容性警告"
+            echo "=========================================="
+            echo "检测到启用了 Docker，但当前源码可能不兼容 nftables。"
+            echo ""
+            echo "VIKINGYFY 源码的 Docker 包仍然依赖 iptables，"
+            echo "与 firewall4 nftables 存在冲突。"
+            echo ""
+            echo "建议："
+            echo "1. 禁用 Docker（修改配置文件）"
+            echo "2. 或使用 C佬源码：./build.sh clx_s20p_nowifi_immwrt"
+            echo "=========================================="
+            echo ""
+            
+            return 1
+        fi
+    fi
+    
+    return 0
+}

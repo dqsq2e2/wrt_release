@@ -293,15 +293,19 @@ update_ath11k_fw() {
 
     if [ -d "$(dirname "$makefile")" ]; then
         echo "正在更新 ath11k-firmware Makefile..."
-        if ! curl -fsSL -o "$new_mk" "$url"; then
-            echo "错误：从 $url 下载 ath11k-firmware Makefile 失败" >&2
-            exit 1
+        if ! curl -fsSL -o "$new_mk" "$url" 2>/dev/null; then
+            echo "警告：从 $url 下载 ath11k-firmware Makefile 失败（网络问题）" >&2
+            echo "跳过 ath11k-firmware 更新，使用原始文件继续编译"
+            return 0
         fi
         if [ ! -s "$new_mk" ]; then
-            echo "错误：下载的 ath11k-firmware Makefile 为空文件" >&2
-            exit 1
+            echo "警告：下载的 ath11k-firmware Makefile 为空文件" >&2
+            echo "跳过 ath11k-firmware 更新，使用原始文件继续编译"
+            rm -f "$new_mk"
+            return 0
         fi
         mv -f "$new_mk" "$makefile"
+        echo "ath11k-firmware Makefile 更新成功"
     fi
 }
 
@@ -356,10 +360,18 @@ update_tcping() {
 
     if [ -d "$(dirname "$tcping_path")" ]; then
         echo "正在更新 tcping Makefile..."
-        if ! curl -fsSL -o "$tcping_path" "$url"; then
-            echo "错误：从 $url 下载 tcping Makefile 失败" >&2
-            exit 1
+        if ! curl -fsSL -o "$tcping_path.new" "$url" 2>/dev/null; then
+            echo "警告：从 $url 下载 tcping Makefile 失败（网络问题）" >&2
+            echo "跳过 tcping 更新，使用原始文件继续编译"
+            return 0
         fi
+        if [ ! -s "$tcping_path.new" ]; then
+            echo "警告：下载的 tcping Makefile 为空文件" >&2
+            rm -f "$tcping_path.new"
+            return 0
+        fi
+        mv "$tcping_path.new" "$tcping_path"
+        echo "tcping Makefile 更新成功"
     fi
 }
 
@@ -515,12 +527,22 @@ update_mosdns_deconfig() {
 fix_quickstart() {
     local file_path="$BUILD_DIR/feeds/small8/luci-app-quickstart/luasrc/controller/istore_backend.lua"
     local url="https://gist.githubusercontent.com/puteulanus/1c180fae6bccd25e57eb6d30b7aa28aa/raw/istore_backend.lua"
-    if [ -f "$file_path" ]; then
-        echo "正在修复 quickstart..."
-        if ! curl -fsSL -o "$file_path" "$url"; then
-            echo "错误：从 $url 下载 istore_backend.lua 失败" >&2
-            exit 1
-        fi
+    
+    if [ ! -f "$file_path" ]; then
+        echo "quickstart istore_backend.lua 文件不存在，跳过修复"
+        return 0
+    fi
+    
+    echo "正在修复 quickstart..."
+    
+    # 尝试下载修复文件，如果失败则跳过（不影响编译）
+    if curl -fsSL -o "$file_path.new" "$url" 2>/dev/null; then
+        mv "$file_path.new" "$file_path"
+        echo "quickstart 修复成功"
+    else
+        echo "警告：无法从 GitHub Gist 下载 quickstart 修复文件（网络问题）"
+        echo "跳过 quickstart 修复，使用原始文件继续编译"
+        rm -f "$file_path.new"
     fi
 }
 
