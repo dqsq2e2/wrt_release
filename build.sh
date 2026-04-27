@@ -189,13 +189,6 @@ apply_config() {
     if grep -q "CONFIG_PACKAGE_dockerd=y" "$BASE_PATH/../$BUILD_DIR/.config"; then
         echo "检测到 Docker 已启用，加载 docker_deps.config"
         cat "$BASE_PATH/deconfig/docker_deps.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
-        
-        # 检查 Docker 兼容性（VIKINGYFY 源码不支持 nftables）
-        source "$BASE_PATH/modules/docker.sh"
-        if ! check_docker_compatibility; then
-            echo "Docker 兼容性检查失败，请禁用 Docker 或使用 C佬源码"
-            echo "继续编译可能会失败..."
-        fi
     else
         echo "Docker 未启用，跳过 docker_deps.config"
     fi
