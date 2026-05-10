@@ -27,6 +27,8 @@ on:
           - zn_m2_immwrt
           - zn_m2_libwrt
           - x64_immwrt
+          - MEDIATEK-WIFI-NO
+          - MEDIATEK-WIFI-YES
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
