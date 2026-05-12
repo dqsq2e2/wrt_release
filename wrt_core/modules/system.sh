@@ -482,13 +482,13 @@ fix_netfilter_kmod_clash() {
     local netfilter_mk="$BUILD_DIR/package/kernel/linux/modules/netfilter.mk"
 
     if [ ! -f "$include_netfilter_mk" ]; then
-        echo "Netfilter include file not found: $include_netfilter_mk" >&2
-        return 1
+        echo "Netfilter include file not found: $include_netfilter_mk, skipping netfilter kmod clash fix"
+        return 0
     fi
 
     if [ ! -f "$netfilter_mk" ]; then
-        echo "Netfilter makefile not found: $netfilter_mk" >&2
-        return 1
+        echo "Netfilter makefile not found: $netfilter_mk, skipping netfilter kmod clash fix"
+        return 0
     fi
 
     if grep -q 'CONFIG_IP_NF_IPTABLES_LEGACY, $(P_V4)ip_tables, ge 6.12' "$include_netfilter_mk" && \
@@ -534,8 +534,8 @@ fix_netfilter_kmod_clash() {
         return 0
     fi
 
-    echo "Netfilter kmod clash workaround target not found in $netfilter_mk" >&2
-    return 1
+    echo "Netfilter kmod clash workaround target not found in $netfilter_mk, skipping"
+    return 0
 }
 
 install_pbr_cmcc() {
