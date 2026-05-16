@@ -2,26 +2,35 @@
 
 _docker_stack_is_dockerman_enabled() {
     local build_dir="$1"
-    local config_file=""
     
     # 规范化路径
     if [[ "$build_dir" != /* ]]; then
         build_dir="$(pwd)/$build_dir"
     fi
     
-    # 查找 .config 文件
-    config_file="$build_dir/.config"
+    # 检查 dockerman 包是否已安装（通过 feeds）
+    # 检查多个可能的路径
+    local dockerman_paths=(
+        "$build_dir/feeds/luci/applications/luci-app-dockerman"
+        "$build_dir/package/feeds/luci/luci-app-dockerman"
+        "$build_dir/feeds/packages/utils/dockerd"
+        "$build_dir/package/feeds/packages/dockerd"
+    )
     
-    # 如果 .config 文件不存在，返回 false（未启用）
-    if [ ! -f "$config_file" ]; then
-        return 1
-    fi
+    for path in "${dockerman_paths[@]}"; do
+        if [ -d "$path" ]; then
+            echo "检测到 dockerman 相关包: $path"
+            return 0
+        fi
+    done
     
-    # 检查配置文件中是否启用了 luci-app-dockerman
-    # CONFIG_PACKAGE_luci-app-dockerman=y 表示启用
-    # CONFIG_PACKAGE_luci-app-dockerman=n 或 # CONFIG_PACKAGE_luci-app-dockerman is not set 表示未启用
-    if grep -q "^CONFIG_PACKAGE_luci-app-dockerman=y" "$config_file"; then
-        return 0
+    # 如果 .config 文件存在，也检查一下配置
+    local config_file="$build_dir/.config"
+    if [ -f "$config_file" ]; then
+        if grep -q "^CONFIG_PACKAGE_luci-app-dockerman=y" "$config_file"; then
+            echo "在 .config 中检测到 dockerman 已启用"
+            return 0
+        fi
     fi
     
     return 1
