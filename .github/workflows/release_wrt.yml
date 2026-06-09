@@ -122,65 +122,15 @@ jobs:
       - name: Build Firmware
         run: ./build.sh ${{ inputs.model }}
 
-      - name: Filter and Package Firmware
+      - name: Check Firmware
         run: |
-          echo "========过滤固件文件========"
-          mkdir -p ./firmware_filtered
-          
-          if [ -d "./firmware" ]; then
-            cd ./firmware
-            
-            echo "========原始固件列表========"
-            ls -lh
-            
-            echo "========开始过滤========"
-            # 只保留关键固件：sysupgrade和factory
-            # 排除: initramfs、preloader、bl2、bl31、fip等中间文件
-            
-            # 保留sysupgrade固件
-            find . -type f \( -name "*sysupgrade*.bin" -o -name "*sysupgrade*.itb" \) -exec cp {} ../firmware_filtered/ \;
-            
-            # 保留factory固件
-            find . -type f \( -name "*factory*.bin" -o -name "*factory*.itb" \) -exec cp {} ../firmware_filtered/ \;
-            
-            # 保留manifest文件（用于获取内核版本和插件列表）
-            find . -type f -name "*.manifest" -exec cp {} ../firmware_filtered/ \;
-            
-            # 如果是n1设备，保留tar.gz文件
-            if [[ "${{ inputs.model }}" == "n1_immwrt" ]]; then
-              find . -type f -name "*.tar.gz" -exec cp {} ../firmware_filtered/ \;
-            fi
-            
-            cd ..
-            
-            echo "========过滤后固件列表========"
-            ls -lh ./firmware_filtered/
-            
-            # 计算固件总大小
-            FIRMWARE_SIZE=$(du -sm ./firmware_filtered 2>/dev/null | cut -f1)
-            FIRMWARE_COUNT=$(find ./firmware_filtered -type f \( -name "*.bin" -o -name "*.itb" \) 2>/dev/null | wc -l)
-            
-            echo "========固件统计========"
-            echo "固件数量: ${FIRMWARE_COUNT}"
-            echo "固件总大小: ${FIRMWARE_SIZE}MB"
-            
-            # 如果固件超过1GB，发出警告
-            if [ $FIRMWARE_SIZE -gt 1024 ]; then
-              echo "⚠️ 警告: 固件总大小超过1GB (${FIRMWARE_SIZE}MB)"
-              echo "建议减少config中启用的设备数量或插件"
-            fi
-            
-            # 替换firmware目录
-            rm -rf ./firmware
-            mv ./firmware_filtered ./firmware
-            
-            echo "========固件过滤完成========"
-            echo "保留文件: *sysupgrade*, *factory*, *.manifest"
-            echo "排除文件: initramfs, preloader, bl2, bl31, fip等中间文件"
-          else
-            echo "❌ 错误: firmware目录不存在"
-            exit 1
-          fi
+          echo "========固件检查========"
+          ls -lh ./firmware/
+          FIRMWARE_SIZE=$(du -sm ./firmware 2>/dev/null | cut -f1)
+          FIRMWARE_COUNT=$(find ./firmware -type f -name "*sysupgrade*" 2>/dev/null | wc -l)
+          echo "固件数量: ${FIRMWARE_COUNT}"
+          echo "固件总大小: ${FIRMWARE_SIZE}MB"
+          echo "======================="
 
       - name: Get Kernel Verion
         run: |
