@@ -307,14 +307,21 @@ jobs:
       - name: Download Firmware Artifact
         uses: actions/download-artifact@v6
         with:
-          name: firmware_${{ matrix.model }}_${{ needs.build-vikingyfy.outputs.build_date }}
+          pattern: firmware_${{ matrix.model }}_*
           path: ./firmware
+          merge-multiple: true
 
-      - name: Get Kernel Version
+      - name: Get Build Info
         run: |
+          # 获取内核版本
           KVER=$(grep -oP "^kernel.*" ./firmware/*.manifest | grep -oP "[4-6]\.[0-9]{1,3}\.[0-9]{1,3}" | head -1)
           echo "KVER=$KVER" >> $GITHUB_ENV
           echo "Kernel version: $KVER"
+          
+          # 生成发布标签（使用当前时间）
+          BUILD_DATE=$(TZ=UTC-8 date +"%y.%m.%d_%H.%M.%S")
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+          echo "Build date: $BUILD_DATE"
 
       - name: Check Firmware
         run: |
@@ -352,7 +359,7 @@ jobs:
       - name: Release Firmware
         uses: softprops/action-gh-release@v2.5.0
         with:
-          tag_name: ${{ needs.build-vikingyfy.outputs.build_date }}_${{ matrix.model }}
+          tag_name: ${{ env.BUILD_DATE }}_${{ matrix.model }}
           files: ./firmware/*
           body_path: ./release_body.txt
 
@@ -371,14 +378,21 @@ jobs:
       - name: Download Firmware Artifact
         uses: actions/download-artifact@v6
         with:
-          name: firmware_${{ matrix.model }}_${{ needs.build-chasey.outputs.build_date }}
+          pattern: firmware_${{ matrix.model }}_*
           path: ./firmware
+          merge-multiple: true
 
-      - name: Get Kernel Version
+      - name: Get Build Info
         run: |
+          # 获取内核版本
           KVER=$(grep -oP "^kernel.*" ./firmware/*.manifest | grep -oP "[4-6]\.[0-9]{1,3}\.[0-9]{1,3}" | head -1)
           echo "KVER=$KVER" >> $GITHUB_ENV
           echo "Kernel version: $KVER"
+          
+          # 生成发布标签（使用当前时间）
+          BUILD_DATE=$(TZ=UTC-8 date +"%y.%m.%d_%H.%M.%S")
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+          echo "Build date: $BUILD_DATE"
 
       - name: Check Firmware
         run: |
@@ -416,6 +430,6 @@ jobs:
       - name: Release Firmware
         uses: softprops/action-gh-release@v2.5.0
         with:
-          tag_name: ${{ needs.build-chasey.outputs.build_date }}_${{ matrix.model }}
+          tag_name: ${{ env.BUILD_DATE }}_${{ matrix.model }}
           files: ./firmware/*
           body_path: ./release_body.txt
