@@ -65,6 +65,112 @@ update_homeproxy() {
 }
 
 
+resolve_latest_lucky_release() {
+    local release_base_url="https://release.66666.host"
+    local root_index
+    local version_index
+    local lucky_index
+    root_index=$(mktemp)
+    version_index=$(mktemp)
+    lucky_index=$(mktemp)
+
+    if ! curl_retry -fsSL -H "Accept: application/json" -o "$root_index" "$release_base_url/"; then
+        echo "错误：无法获取 Lucky 发布目录。" >&2
+        rm -f "$root_index" "$version_index" "$lucky_index"
+        return 1
+    fi
+
+    local release_dir
+    release_dir=$(python3 - "$root_index" <<'PY'
+import json
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    entries = json.load(stream)
+
+candidates = [
+    entry for entry in entries
+    if entry.get("is_dir") and re.fullmatch(r"v[0-9][0-9A-Za-z._-]*", entry.get("name", ""))
+]
+if not candidates:
+    raise SystemExit(1)
+
+latest = max(candidates, key=lambda entry: entry.get("mod_time", ""))
+print(latest["name"])
+PY
+    ) || {
+        echo "错误：Lucky 发布目录中没有可用版本。" >&2
+        rm -f "$root_index" "$version_index" "$lucky_index"
+        return 1
+    }
+
+    if ! curl_retry -fsSL -H "Accept: application/json" -o "$version_index" "$release_base_url/$release_dir/"; then
+        echo "错误：无法获取 Lucky 版本目录 $release_dir。" >&2
+        rm -f "$root_index" "$version_index" "$lucky_index"
+        return 1
+    fi
+
+    local lucky_release_dir
+    lucky_release_dir=$(python3 - "$version_index" <<'PY'
+import json
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    entries = json.load(stream)
+
+candidates = [
+    entry for entry in entries
+    if entry.get("is_dir") and re.fullmatch(r"[0-9]+(?:\.[0-9]+)+_lucky", entry.get("name", ""))
+]
+if not candidates:
+    raise SystemExit(1)
+
+latest = max(candidates, key=lambda entry: entry.get("mod_time", ""))
+print(latest["name"])
+PY
+    ) || {
+        echo "错误：$release_dir 中没有纯 Lucky 发布目录。" >&2
+        rm -f "$root_index" "$version_index" "$lucky_index"
+        return 1
+    }
+
+    local lucky_version="${lucky_release_dir%_lucky}"
+    if ! curl_retry -fsSL -H "Accept: application/json" -o "$lucky_index" "$release_base_url/$release_dir/$lucky_release_dir/"; then
+        echo "错误：无法获取 Lucky 文件目录 $release_dir/$lucky_release_dir。" >&2
+        rm -f "$root_index" "$version_index" "$lucky_index"
+        return 1
+    fi
+
+    if ! python3 - "$lucky_index" "$lucky_version" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    entries = json.load(stream)
+
+version = sys.argv[2]
+names = {entry.get("name") for entry in entries if not entry.get("is_dir")}
+required = {
+    f"lucky_{version}_Linux_arm64.tar.gz",
+    f"lucky_{version}_Linux_x86_64.tar.gz",
+}
+missing = required - names
+if missing:
+    print("缺少 Lucky 架构包: " + ", ".join(sorted(missing)), file=sys.stderr)
+    raise SystemExit(1)
+PY
+    then
+        rm -f "$root_index" "$version_index" "$lucky_index"
+        return 1
+    fi
+
+    rm -f "$root_index" "$version_index" "$lucky_index"
+    printf '%s\t%s\t%s\n' "$release_dir" "$lucky_release_dir" "$lucky_version"
+}
+
+
 update_lucky() {
     local lucky_repo_url="https://github.com/gdy666/luci-app-lucky.git"
     local target_custom_feed_dir="$(get_custom_feed_worktree_dir)"
@@ -109,29 +215,80 @@ update_lucky() {
         sed -i "s/option logger '1'/option logger '0'/g" "$lucky_conf"
     fi
 
-    local version
-    version=$(find "$BASE_PATH/patches" -name "lucky_*.tar.gz" -printf "%f\n" | head -n 1 | sed -n 's/^lucky_\(.*\)_Linux.*$/\1/p')
-    if [ -z "$version" ]; then
-        echo "Warning: 未找到 lucky 补丁文件，跳过更新。" >&2
-        return 0
-    fi
-
     local makefile_path="$(get_custom_feed_worktree_dir)/lucky/Makefile"
     if [ ! -f "$makefile_path" ]; then
         echo "Warning: lucky Makefile not found. Skipping." >&2
         return 0
     fi
 
-    echo "正在更新 lucky Makefile..."
-    local patch_line="\\t[ -f \$(TOPDIR)/../wrt_core/patches/lucky_${version}_Linux_\$(LUCKY_ARCH)_wanji.tar.gz ] && install -Dm644 \$(TOPDIR)/../wrt_core/patches/lucky_${version}_Linux_\$(LUCKY_ARCH)_wanji.tar.gz \$(PKG_BUILD_DIR)/\$(PKG_NAME)_\$(PKG_VERSION)_Linux_\$(LUCKY_ARCH).tar.gz"
-
-    if grep -q "Build/Prepare" "$makefile_path"; then
-        sed -i "/Build\\/Prepare/a\\$patch_line" "$makefile_path"
-        sed -i '/wget/d' "$makefile_path"
-        echo "lucky Makefile 更新完成。"
-    else
-        echo "Warning: lucky Makefile 中未找到 'Build/Prepare'。跳过。" >&2
+    local release_info
+    if ! release_info=$(resolve_latest_lucky_release); then
+        echo "Warning: Lucky 最新版本解析失败，保留上游纯 Lucky 下载逻辑。" >&2
+        return 0
     fi
+
+    local release_dir
+    local lucky_release_dir
+    local lucky_version
+    IFS=$'\t' read -r release_dir lucky_release_dir lucky_version <<<"$release_info"
+    local download_base_url="https://release.66666.host/$release_dir/$lucky_release_dir"
+
+    echo "正在更新 lucky Makefile: $release_dir/$lucky_release_dir..."
+    if ! python3 - "$makefile_path" "$lucky_version" "$download_base_url" <<'PY'
+import pathlib
+import re
+import sys
+
+makefile = pathlib.Path(sys.argv[1])
+version = sys.argv[2]
+download_base_url = sys.argv[3].rstrip("/")
+lines = makefile.read_text(encoding="utf-8").splitlines(keepends=True)
+
+version_count = 0
+for index, line in enumerate(lines):
+    if line.startswith("PKG_VERSION:="):
+        lines[index] = f"PKG_VERSION:={version}\n"
+        version_count += 1
+
+if version_count != 1:
+    raise SystemExit("Lucky Makefile 中未找到唯一的 PKG_VERSION")
+
+prepare_start = next((index for index, line in enumerate(lines) if line.strip() == "define Build/Prepare"), None)
+if prepare_start is None:
+    raise SystemExit("Lucky Makefile 中未找到 Build/Prepare")
+
+prepare_end = next(
+    (index for index in range(prepare_start + 1, len(lines)) if lines[index].strip() == "endef"),
+    None,
+)
+if prepare_end is None:
+    raise SystemExit("Lucky Makefile 的 Build/Prepare 未闭合")
+
+download_line = (
+    "\t[ ! -f $(PKG_BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz ] "
+    f"&& wget --tries=3 --timeout=30 {download_base_url}/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz "
+    "-O $(PKG_BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz\n"
+)
+
+download_indexes = [
+    index for index in range(prepare_start + 1, prepare_end)
+    if "wget " in lines[index] or "wrt_core/patches/lucky_" in lines[index]
+]
+if download_indexes:
+    lines[download_indexes[0]] = download_line
+    for index in reversed(download_indexes[1:]):
+        del lines[index]
+else:
+    lines.insert(prepare_start + 1, download_line)
+
+makefile.write_text("".join(lines), encoding="utf-8")
+PY
+    then
+        echo "Warning: lucky Makefile 更新失败，保留上游下载逻辑。" >&2
+        return 0
+    fi
+
+    echo "lucky Makefile 已切换到纯 Lucky $lucky_version：$download_base_url"
 }
 
 

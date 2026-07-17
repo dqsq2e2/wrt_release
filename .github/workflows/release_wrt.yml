@@ -13,12 +13,15 @@ on:
           - aliyun_ap8220_immwrt
           - aliyun_ap8220_libwrt
           - cmcc_rax3000m_immwrt
+          - clx_s20p_immwrt
           - gemtek_w1701k_immwrt
           - jdcloud_ax6000_immwrt
           - jdcloud_ipq60xx_immwrt
           - jdcloud_ipq60xx_libwrt
           - link_nn6000v2_immwrt
           - linksys_mx4x00_immwrt
+          - MEDIATEK-WIFI-NO
+          - MEDIATEK-WIFI-YES
           - n1_immwrt
           - qihoo_360v6_immwrt
           - redmi_ax5_immwrt
@@ -36,9 +39,48 @@ on:
         required: false
         description: Remove default config fragments, comma separated
         default: ""
+      upstream_sha:
+        required: false
+        description: Automatic upstream watcher input; leave empty for manual builds
+        default: ""
+      build_fingerprint:
+        required: false
+        description: Automatic upstream watcher input; leave empty for manual builds
+        default: ""
+  workflow_call:
+    inputs:
+      model:
+        required: true
+        type: string
+      add_fragments:
+        required: false
+        type: string
+        default: ""
+      remove_fragments:
+        required: false
+        type: string
+        default: ""
+      upstream_sha:
+        required: false
+        type: string
+        default: ""
+      build_fingerprint:
+        required: false
+        type: string
+        default: ""
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  CCACHE_MAXSIZE: 2G
+  CCACHE_COMPRESS: "true"
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: wrt-${{ inputs.model }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -55,8 +97,11 @@ jobs:
           sudo rm -rf /opt/ghc || true
           sudo rm -rf /usr/local/.ghcup || true
           sudo rm -rf /usr/share/swift || true
+          sudo rm -rf /usr/local/share/powershell || true
+          sudo rm -rf /opt/az || true
+          sudo rm -rf /opt/microsoft || true
           sudo rm -rf "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}" || true
-          docker system prune -af || true
+          docker system prune -af --volumes || true
           sudo -E apt-get autoremove --purge -y || true
           sudo -E apt-get clean || true
           df -hT
@@ -96,11 +141,13 @@ jobs:
         with:
           path: |
             ./action_build/.ccache
-            ./action_build/staging_dir
+            ./action_build/staging_dir/host*
+            ./action_build/staging_dir/tool*
           key: ${{ matrix.os }}-${{ inputs.model }}-${{ hashFiles('**/repo_flag') }}-${{ env.ADD_CONFIG_FRAGMENTS_KEY }}-${{ env.REMOVE_CONFIG_FRAGMENTS_KEY }}-${{ env.BUILD_DATE }}
           restore-keys: |
             ${{ matrix.os }}-${{ inputs.model }}-${{ hashFiles('**/repo_flag') }}-${{ env.ADD_CONFIG_FRAGMENTS_KEY }}-${{ env.REMOVE_CONFIG_FRAGMENTS_KEY }}-
             ${{ matrix.os }}-${{ inputs.model }}-${{ hashFiles('**/repo_flag') }}-
+            ${{ matrix.os }}-${{ inputs.model }}-
 
       - name: Refresh the cache
         run: |
@@ -141,17 +188,28 @@ jobs:
         env:
           ADD_CONFIG_FRAGMENTS: ${{ inputs.add_fragments }}
           REMOVE_CONFIG_FRAGMENTS: ${{ inputs.remove_fragments }}
-        run: ./build.sh ${{ inputs.model }}
+        run: |
+          available_gb=$(df --output=avail -BG . | tail -n 1 | tr -dc '0-9')
+          required_gb=20
+          if [[ "${{ inputs.model }}" == "MEDIATEK-WIFI-YES" ]]; then
+            required_gb=35
+          fi
+          if (( available_gb < required_gb )); then
+            echo "Insufficient disk space: ${available_gb}G available, ${required_gb}G required" >&2
+            exit 1
+          fi
+          ./build.sh ${{ inputs.model }}
 
       - name: Get Kernel Verion
         run: |
           # 获取内核版本
-          echo "KVER=$(grep -oP "^kernel.*" ./firmware/*.manifest | grep -oP "[4-6]\.[0-9]{1,3}\.[0-9]{1,3}")" >> $GITHUB_ENV
+          KVER=$(grep -h -oP "^kernel.*" ./firmware/*.manifest | grep -oP "[4-6]\.[0-9]{1,3}\.[0-9]{1,3}" | sort -u | head -n 1)
+          echo "KVER=${KVER:-unknown}" >> "$GITHUB_ENV"
 
       - name: Delete Old Cache
         run: |
           # 获取缓存列表并删除
-          gh cache list --key ${{ matrix.os }}-${{ inputs.model }}-${{ hashFiles('**/repo_flag') }}- --json key --jq '.[] | .key' | while read -r key; do
+          gh cache list --key ${{ matrix.os }}-${{ inputs.model }}- --json key --jq '.[] | .key' | while read -r key; do
             gh cache delete "$key"
           done
           # 输出缓存状态
@@ -186,6 +244,7 @@ jobs:
           echo "===================================================="
 
       - name: Package Kmods
+        if: ${{ !startsWith(inputs.model, 'MEDIATEK-WIFI-') }}
         run: |
           if [ ! -d "./action_build/bin" ]; then
             echo "kmod source directory not found: ./action_build/bin" >&2
@@ -228,16 +287,77 @@ jobs:
           echo "Kernel: ${{ env.KVER }}" >> release_body.txt
           echo "WIFI密码: 12345678" >> release_body.txt
           echo "LAN地址: 192.168.1.1" >> release_body.txt
-          echo "KMOD归档: ${KMOD_ARCHIVE}" >> release_body.txt
+          if [[ -n "${KMOD_ARCHIVE:-}" ]]; then
+            echo "KMOD归档: ${KMOD_ARCHIVE}" >> release_body.txt
+          else
+            echo "KMOD归档: 多设备构建为节省空间已跳过" >> release_body.txt
+          fi
+          if [[ -n "${{ inputs.upstream_sha }}" ]]; then
+            echo "上游提交: ${{ inputs.upstream_sha }}" >> release_body.txt
+            echo "构建指纹: ${{ inputs.build_fingerprint }}" >> release_body.txt
+          fi
           echo "插件：" >> release_body.txt
           echo "$(grep -oP "luci-app(-[a-zA-Z0-9]{1,}){1,}" ./firmware/*.manifest | awk -F":" '{print $NF}')"  >> release_body.txt
+
+      - name: Prepare Release Files
+        run: |
+          rm -rf ./release_files
+          mkdir -p ./release_files
+          if [[ "${{ inputs.model }}" == "n1_immwrt" ]]; then
+            source_dir="${PACKAGED_OUTPUTPATH}"
+          else
+            source_dir="./firmware"
+          fi
+          find "$source_dir" -maxdepth 1 -type f -exec mv -f {} ./release_files/ \;
+          if [[ -n "${KMOD_ARCHIVE:-}" && -f "$KMOD_ARCHIVE" ]]; then
+            mv -f "$KMOD_ARCHIVE" ./release_files/
+          fi
+          if ! find ./release_files -maxdepth 1 -type f -print -quit | grep -q .; then
+            echo "No release files were prepared" >&2
+            exit 1
+          fi
 
       - name: Release Firmware
         uses: softprops/action-gh-release@v3.0.1
         with:
           tag_name: ${{ env.BUILD_DATE }}_${{ inputs.model }}
-          files: |
-            ${{ inputs.model == 'n1_immwrt' && env.PACKAGED_OUTPUTPATH || './firmware' }}/*.*
-            ./kmods_*.tar.gz
+          files: ./release_files/*
           fail_on_unmatched_files: true
           body_path: ./release_body.txt
+
+      - name: Prune Old Monitored Releases
+        if: ${{ contains(fromJSON('["MEDIATEK-WIFI-YES","MEDIATEK-WIFI-NO","clx_s20p_immwrt","jdcloud_ax6000_immwrt"]'), inputs.model) }}
+        env:
+          MODEL: ${{ inputs.model }}
+        run: |
+          gh release list --limit 100 --json tagName,publishedAt | \
+            jq -r --arg suffix "_$MODEL" 'sort_by(.publishedAt) | reverse | map(select(.tagName | endswith($suffix))) | .[2:] | .[].tagName' | \
+            while read -r tag; do
+              if [[ -n "$tag" ]]; then
+                echo "Deleting old release: $tag"
+                gh release delete "$tag" --cleanup-tag --yes || true
+              fi
+            done
+
+      - name: Prepare Successful Build Marker
+        if: ${{ inputs.build_fingerprint != '' }}
+        run: |
+          marker_dir=".ci-state/${{ inputs.model }}"
+          mkdir -p "$marker_dir"
+          printf '%s\n%s\n' "${{ inputs.upstream_sha }}" "${{ inputs.build_fingerprint }}" > "$marker_dir/upstream.txt"
+
+      - name: Save Successful Build Marker
+        if: ${{ inputs.build_fingerprint != '' }}
+        uses: actions/cache@v6.1.0
+        with:
+          path: ./.ci-state/${{ inputs.model }}
+          key: upstream-watch-${{ inputs.model }}-${{ inputs.build_fingerprint }}
+
+      - name: Cleanup Target Build
+        if: ${{ always() }}
+        run: |
+          if [ -f ./action_build/Makefile ]; then
+            make -C ./action_build clean || true
+          fi
+          rm -rf ./action_build/build_dir ./action_build/staging_dir/target-* ./action_build/bin ./firmware ./release_files ./kmods_*.tar.gz
+          df -hT

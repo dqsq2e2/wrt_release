@@ -205,6 +205,7 @@ DEFAULT_CONFIG_FRAGMENTS=()
 ADD_CONFIG_FRAGMENT_LIST=()
 REMOVE_CONFIG_FRAGMENT_LIST=()
 EFFECTIVE_CONFIG_FRAGMENTS=()
+DOCKER_STACK_PATCHES_ENABLED=0
 
 parse_fragment_csv() {
     local csv=$1
@@ -294,6 +295,12 @@ resolve_config_fragments() {
             echo "Warning: removing platform fragment 'nss' is high risk." >&2
         fi
     done
+
+    if fragment_in_list "docker_deps" "${EFFECTIVE_CONFIG_FRAGMENTS[@]}"; then
+        DOCKER_STACK_PATCHES_ENABLED=1
+    else
+        DOCKER_STACK_PATCHES_ENABLED=0
+    fi
 }
 
 print_config_fragment_summary() {
@@ -303,6 +310,7 @@ print_config_fragment_summary() {
     echo "  Add fragments: $(join_fragments "${ADD_CONFIG_FRAGMENT_LIST[@]}")"
     echo "  Remove fragments: $(join_fragments "${REMOVE_CONFIG_FRAGMENT_LIST[@]}")"
     echo "  Effective fragments: $(join_fragments "${EFFECTIVE_CONFIG_FRAGMENTS[@]}")"
+    echo "  Docker stack patches: $([[ $DOCKER_STACK_PATCHES_ENABLED == "1" ]] && echo enabled || echo skipped)"
 }
 
 print_config_preview() {
@@ -430,7 +438,8 @@ if [[ -d action_build ]]; then
     BUILD_DIR="action_build"
 fi
 
-"$BASE_PATH/update.sh" "$REPO_URL" "$REPO_BRANCH" "$BUILD_DIR" "$COMMIT_HASH"
+DOCKER_STACK_PATCHES_ENABLED="$DOCKER_STACK_PATCHES_ENABLED" \
+    "$BASE_PATH/update.sh" "$REPO_URL" "$REPO_BRANCH" "$BUILD_DIR" "$COMMIT_HASH"
 
 apply_config
 print_config_fragment_summary
@@ -448,6 +457,14 @@ fi
 
 if [[ $Build_Mod == "debug" ]]; then
     exit 0
+fi
+
+# 多设备独立 rootfs 会随设备列表和逐设备包配置变化，不能复用旧 target 构建产物。
+# make clean 仅清理目标构建目录、目标 staging 和输出，不删除 dl 或已构建工具链。
+if grep -qE '^CONFIG_TARGET_MULTI_PROFILE=y$' .config && \
+    grep -qE '^CONFIG_TARGET_PER_DEVICE_ROOTFS=y$' .config; then
+    echo "检测到多设备独立 rootfs 配置，清理旧目标/rootfs 构建缓存..."
+    make clean
 fi
 
 TARGET_DIR="$BASE_PATH/../$BUILD_DIR/bin/targets"

@@ -13,12 +13,15 @@ on:
           - aliyun_ap8220_immwrt
           - aliyun_ap8220_libwrt
           - cmcc_rax3000m_immwrt
+          - clx_s20p_immwrt
           - gemtek_w1701k_immwrt
           - jdcloud_ax6000_immwrt
           - jdcloud_ipq60xx_immwrt
           - jdcloud_ipq60xx_libwrt
           - link_nn6000v2_immwrt
           - linksys_mx4x00_immwrt
+          - MEDIATEK-WIFI-NO
+          - MEDIATEK-WIFI-YES
           - qihoo_360v6_immwrt
           - redmi_ax5_immwrt
           - redmi_ax6_immwrt
@@ -38,6 +41,16 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  CCACHE_MAXSIZE: 2G
+  CCACHE_COMPRESS: "true"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: wrt-${{ inputs.model }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -54,8 +67,11 @@ jobs:
           sudo rm -rf /opt/ghc || true
           sudo rm -rf /usr/local/.ghcup || true
           sudo rm -rf /usr/share/swift || true
+          sudo rm -rf /usr/local/share/powershell || true
+          sudo rm -rf /opt/az || true
+          sudo rm -rf /opt/microsoft || true
           sudo rm -rf "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}" || true
-          docker system prune -af || true
+          docker system prune -af --volumes || true
           sudo -E apt-get autoremove --purge -y || true
           sudo -E apt-get clean || true
           df -hT
@@ -93,11 +109,13 @@ jobs:
         with:
           path: |
             ./action_build/.ccache
-            ./action_build/staging_dir
+            ./action_build/staging_dir/host*
+            ./action_build/staging_dir/tool*
           key: ${{ matrix.os }}-${{ inputs.model }}-${{ hashFiles('**/repo_flag') }}-${{ env.ADD_CONFIG_FRAGMENTS_KEY }}-${{ env.REMOVE_CONFIG_FRAGMENTS_KEY }}-${{ env.BUILD_DATE }}
           restore-keys: |
             ${{ matrix.os }}-${{ inputs.model }}-${{ hashFiles('**/repo_flag') }}-${{ env.ADD_CONFIG_FRAGMENTS_KEY }}-${{ env.REMOVE_CONFIG_FRAGMENTS_KEY }}-
             ${{ matrix.os }}-${{ inputs.model }}-${{ hashFiles('**/repo_flag') }}-
+            ${{ matrix.os }}-${{ inputs.model }}-
 
       - name: Refresh the cache
         run: |
@@ -138,12 +156,22 @@ jobs:
         env:
           ADD_CONFIG_FRAGMENTS: ${{ inputs.add_fragments }}
           REMOVE_CONFIG_FRAGMENTS: ${{ inputs.remove_fragments }}
-        run: ./build.sh ${{ inputs.model }}
+        run: |
+          available_gb=$(df --output=avail -BG . | tail -n 1 | tr -dc '0-9')
+          required_gb=20
+          if [[ "${{ inputs.model }}" == "MEDIATEK-WIFI-YES" ]]; then
+            required_gb=35
+          fi
+          if (( available_gb < required_gb )); then
+            echo "Insufficient disk space: ${available_gb}G available, ${required_gb}G required" >&2
+            exit 1
+          fi
+          ./build.sh ${{ inputs.model }}
 
       - name: Delete Old Cache
         run: |
           # 获取缓存列表并删除
-          gh cache list --key ${{ matrix.os }}-${{ inputs.model }}-${{ hashFiles('**/repo_flag') }}- --json key --jq '.[] | .key' | while read -r key; do
+          gh cache list --key ${{ matrix.os }}-${{ inputs.model }}- --json key --jq '.[] | .key' | while read -r key; do
             gh cache delete "$key"
           done
           # 输出缓存状态
@@ -182,3 +210,14 @@ jobs:
         with:
           name: ${{ env.BUILD_DATE }}_${{ inputs.model }}
           path: ./firmware/*.*
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Cleanup Target Build
+        if: ${{ always() }}
+        run: |
+          if [ -f ./action_build/Makefile ]; then
+            make -C ./action_build clean || true
+          fi
+          rm -rf ./action_build/build_dir ./action_build/staging_dir/target-* ./action_build/bin ./firmware
+          df -hT

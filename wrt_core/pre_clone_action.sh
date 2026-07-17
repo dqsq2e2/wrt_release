@@ -31,6 +31,8 @@ read_ini_by_key() {
 REPO_URL=$(read_ini_by_key "REPO_URL")
 REPO_BRANCH=$(read_ini_by_key "REPO_BRANCH")
 REPO_BRANCH=${REPO_BRANCH:-main}
+COMMIT_HASH=$(read_ini_by_key "COMMIT_HASH")
+COMMIT_HASH=${COMMIT_HASH:-none}
 # GitHub Actions usually runs in root of repo, so build dir should be relative to repo root
 # We need to construct absolute path or ensure context is correct.
 # Assuming this script is run from repo root or wrt_core.
@@ -39,9 +41,15 @@ REPO_BRANCH=${REPO_BRANCH:-main}
 BUILD_DIR="$BASE_PATH/../action_build"
 
 echo $REPO_URL $REPO_BRANCH
-# Write flag one level up from wrt_core (repo root usually)
-echo "$REPO_URL/$REPO_BRANCH" >"$BASE_PATH/../repo_flag"
 git_retry clone --depth 1 -b "$REPO_BRANCH" "$REPO_URL" "$BUILD_DIR"
+
+# Cache identity includes the actual upstream commit so incompatible host/toolchain
+# caches are not treated as an exact hit after the source branch advances.
+SOURCE_HASH=$(git -C "$BUILD_DIR" rev-parse HEAD)
+if [[ $COMMIT_HASH != "none" ]]; then
+    SOURCE_HASH=$COMMIT_HASH
+fi
+echo "$REPO_URL/$REPO_BRANCH/$SOURCE_HASH" >"$BASE_PATH/../repo_flag"
 
 # GitHub Action 移除国内下载源
 PROJECT_MIRRORS_FILE="$BUILD_DIR/scripts/projectsmirrors.json"

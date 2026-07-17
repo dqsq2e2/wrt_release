@@ -25,6 +25,15 @@ GOLANG_REPO="https://github.com/sbwml/packages_lang_golang"
 GOLANG_BRANCH="26.x"
 THEME_SET="argon"
 LAN_ADDR="192.168.1.1"
+DOCKER_STACK_PATCHES_ENABLED=${DOCKER_STACK_PATCHES_ENABLED:-1}
+
+case "$DOCKER_STACK_PATCHES_ENABLED" in
+    0|1) ;;
+    *)
+        echo "Error: DOCKER_STACK_PATCHES_ENABLED must be 0 or 1, got: $DOCKER_STACK_PATCHES_ENABLED" >&2
+        exit 1
+        ;;
+esac
 
 SCRIPT_DIR=$(cd $(dirname $0) && pwd)
 BASE_PATH=${BASE_PATH:-$SCRIPT_DIR}
@@ -42,6 +51,10 @@ source "$SCRIPT_DIR/modules/package_source_updates.sh"
 source "$SCRIPT_DIR/modules/target_fixes.sh"
 source "$SCRIPT_DIR/modules/luci_fixes.sh"
 source "$SCRIPT_DIR/modules/service_fixes.sh"
+
+docker_stack_patches_enabled() {
+    [[ "$DOCKER_STACK_PATCHES_ENABLED" == "1" ]]
+}
 
 
 # 阶段顺序不可随意调整：feeds install 前后依赖的目录不同。
@@ -104,7 +117,11 @@ stage_pre_install_source_fixes() {
     update_smartdns
     update_mwan3_fw4
     update_diskman
-    update_dockerman
+    if docker_stack_patches_enabled; then
+        update_dockerman
+    else
+        echo "Skipping Dockerman source update: effective fragments do not include docker_deps."
+    fi
     set_nginx_default_config
     update_uwsgi_limit_as
     update_argon
@@ -124,7 +141,11 @@ stage_feeds_install() {
 stage_post_install_package_fixes() {
     # 这里处理已安装到 package/feeds/* 的包和最终一致性检查。
     verify_custom_feed_installed_paths
-    docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
+    if docker_stack_patches_enabled; then
+        docker_stack_sync_nftables_compat "$BUILD_DIR" "0"
+    else
+        echo "Skipping Docker nftables compatibility patches: effective fragments do not include docker_deps."
+    fi
     fix_cups_libcups_avahi_depends
     fix_easytier_lua
     update_adguardhome

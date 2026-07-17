@@ -1,0 +1,91 @@
+name: Upstream Watch
+run-name: Upstream Watch - ${{ inputs.model || 'scheduled' }}
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - "wrt_core/deconfig/MEDIATEK-WIFI-YES.config"
+      - "wrt_core/deconfig/MEDIATEK-WIFI-NO.config"
+      - "wrt_core/deconfig/clx_s20p_immwrt.config"
+      - "wrt_core/deconfig/jdcloud_ax6000_immwrt.config"
+      - "wrt_core/compilecfg/MEDIATEK-WIFI-YES.ini"
+      - "wrt_core/compilecfg/MEDIATEK-WIFI-NO.ini"
+      - "wrt_core/compilecfg/clx_s20p_immwrt.ini"
+      - "wrt_core/compilecfg/jdcloud_ax6000_immwrt.ini"
+      - "wrt_core/deconfig/compile_base.config"
+      - "wrt_core/deconfig/fragments/**"
+      - "wrt_core/modules/**"
+      - "wrt_core/patches/**"
+      - "wrt_core/update.sh"
+      - "wrt_core/pre_clone_action.sh"
+      - "wrt_core/ci/detect_upstream_changes.sh"
+      - "build.sh"
+      - ".github/workflows/release_wrt.yml"
+      - ".github/workflows/upstream_watch.yml"
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Monitored build configuration
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - MEDIATEK-WIFI-YES
+          - MEDIATEK-WIFI-NO
+          - clx_s20p_immwrt
+          - jdcloud_ax6000_immwrt
+      force_build:
+        description: Build even when the fingerprint was already released
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: upstream-watch
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    runs-on: ubuntu-24.04
+    outputs:
+      count: ${{ steps.detect.outputs.count }}
+      matrix: ${{ steps.detect.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+
+      - name: Detect Upstream Changes
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WATCH_MODEL: ${{ inputs.model || 'all' }}
+          FORCE_BUILD: ${{ inputs.force_build || false }}
+        run: |
+          echo '| Config | Branch | Commit | Action |' >> "$GITHUB_STEP_SUMMARY"
+          echo '| --- | --- | --- | --- |' >> "$GITHUB_STEP_SUMMARY"
+          bash wrt_core/ci/detect_upstream_changes.sh
+
+  build:
+    needs: detect
+    if: ${{ needs.detect.outputs.count != '0' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    uses: ./.github/workflows/release_wrt.yml
+    with:
+      model: ${{ matrix.model }}
+      add_fragments: ""
+      remove_fragments: ""
+      upstream_sha: ${{ matrix.upstream_sha }}
+      build_fingerprint: ${{ matrix.fingerprint }}
+    secrets: inherit
