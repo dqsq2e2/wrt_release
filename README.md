@@ -1,14 +1,15 @@
-**# 高质量<免费>交流群**
+## 高质量免费交流群
 
-点击链接加入群聊【IPQ技术讨论群】：https://qm.qq.com/q/v7nMhzB4oU
+- [加入 IPQ技术讨论群](https://qm.qq.com/q/v7nMhzB4oU)
+- 该群为普通交流群。
 
-该群为普通交流群。
+## 高质量付费中转站
 
-**# 高质量<付费>中转站** https://api.zipimg.cn/register?aff=LMPJPW5QCLPL
+- [注册高质量付费中转站](https://api.zipimg.cn/register?aff=LMPJPW5QCLPL)
+- [加入 LiBwrt-Ai学习群](https://qm.qq.com/q/HTa7OiWNCU)
+- 该群为 AI 中转站群。
 
-点击链接加入群聊【LiBwrt-Ai学习】：https://qm.qq.com/q/HTa7OiWNCU
-
-该群为AI中转站群。
+---
 
 # 编译指南
 
