@@ -79,7 +79,7 @@ jobs:
     if: ${{ needs.detect.outputs.count != '0' }}
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 4
       matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
     uses: ./.github/workflows/release_wrt.yml
     with:
