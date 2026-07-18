@@ -20,7 +20,7 @@ sudo bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_e
 ## 3. 获取源码
 
 ```bash
-git clone https://github.com/ZqinKing/wrt_release.git
+git clone https://github.com/dqsq2e2/wrt_release.git
 cd wrt_release
 ```
 
