@@ -1,3 +1,15 @@
+**# 高质量<免费>交流群**
+
+点击链接加入群聊【IPQ技术讨论群】：https://qm.qq.com/q/v7nMhzB4oU
+
+该群为普通交流群。
+
+**# 高质量<付费>中转站** https://api.zipimg.cn/register?aff=LMPJPW5QCLPL
+
+点击链接加入群聊【LiBwrt-Ai学习】：https://qm.qq.com/q/HTa7OiWNCU
+
+该群为AI中转站群。
+
 # 编译指南
 
 本仓库用于按设备配置自动拉取 OpenWrt / ImmortalWrt / LiBwrt 源码、应用自定义补丁与软件包配置，并输出固件到 `firmware/` 目录。
