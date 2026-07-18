@@ -45,7 +45,7 @@ jobs:
 
       - name: Prune Old Workflow Runs
         run: |
-          cutoff=$(date -u -d '30 days ago' +%s)
+          cutoff=$(date -u -d '3 days ago' +%s)
           gh run list --limit 500 --json databaseId,createdAt,status | jq -r '.[] | select(.status == "completed") | [.databaseId, .createdAt] | @tsv' | \
           while IFS=$'\t' read -r run_id created_at; do
             run_time=$(date -u -d "$created_at" +%s)
