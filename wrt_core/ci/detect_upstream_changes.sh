@@ -5,6 +5,10 @@ set -euo pipefail
 FORCE_BUILD=${FORCE_BUILD:-false}
 WATCH_MODEL=${WATCH_MODEL:-all}
 OUTPUT_FILE=${GITHUB_OUTPUT:-/dev/stdout}
+SOURCE_COMMIT=${GITHUB_SHA:-HEAD}
+LEGACY_FINGERPRINT_COMMITS=(
+    18f4b5355c012f625726a6268ce760db2c38144b
+)
 
 MODELS=(
     MEDIATEK-WIFI-YES
@@ -19,11 +23,29 @@ read_ini_value() {
     sed -n "s/^${key}=//p" "$file" | head -n 1
 }
 
-append_hash_file() {
-    local file=$1
-    if [[ -f $file ]]; then
-        printf '%s\0' "$file"
-        sha256sum "$file"
+append_git_hash_file() {
+    local commit=$1
+    local file=$2
+    local file_hash
+    if git cat-file -e "${commit}:${file}" 2>/dev/null; then
+        file_hash=$(git show "${commit}:${file}" | sha256sum | awk '{print $1}')
+        printf '%s\0%s  %s\n' "$file" "$file_hash" "$file"
+    fi
+}
+
+calculate_git_hash() {
+    local commit=$1
+    shift
+    local file
+    for file in "$@"; do
+        append_git_hash_file "$commit" "$file"
+    done | sha256sum | awk '{print $1}'
+}
+
+ensure_git_commit() {
+    local commit=$1
+    if ! git cat-file -e "${commit}^{commit}" 2>/dev/null; then
+        git fetch --quiet --no-tags --depth=1 origin "$commit"
     fi
 }
 
@@ -68,31 +90,59 @@ for model in "${MODELS[@]}"; do
         wrt_core/pre_clone_action.sh
         .github/workflows/release_wrt.yml
     )
+    legacy_hash_files=(
+        "$ini_file"
+        "$config_file"
+        wrt_core/deconfig/compile_base.config
+        build.sh
+        wrt_core/update.sh
+        wrt_core/pre_clone_action.sh
+        wrt_core/ci/detect_upstream_changes.sh
+        .github/workflows/release_wrt.yml
+        .github/workflows/upstream_watch.yml
+    )
 
     IFS=',' read -r -a fragments <<<"$config_fragments"
     for fragment in "${fragments[@]}"; do
         fragment=${fragment//[[:space:]]/}
         if [[ -n $fragment ]]; then
             hash_files+=("wrt_core/deconfig/fragments/${fragment}.config")
+            legacy_hash_files+=("wrt_core/deconfig/fragments/${fragment}.config")
         fi
     done
 
     while IFS= read -r module_file; do
         hash_files+=("$module_file")
+        legacy_hash_files+=("$module_file")
     done < <(find wrt_core/modules -type f -name '*.sh' -print | sort)
 
     while IFS= read -r patch_file; do
         hash_files+=("$patch_file")
+        legacy_hash_files+=("$patch_file")
     done < <(find wrt_core/patches -type f -print | sort)
 
-    config_hash=$(
-        for hash_file in "${hash_files[@]}"; do
-            append_hash_file "$hash_file"
-        done | sha256sum | awk '{print $1}'
-    )
+    config_hash=$(calculate_git_hash "$SOURCE_COMMIT" "${hash_files[@]}")
     fingerprint=$(printf '%s\n%s\n%s\n%s\n' "$repo_url" "$repo_branch" "$upstream_sha" "$config_hash" | sha256sum | awk '{print $1}')
     cache_key="upstream-watch-${model}-${fingerprint}"
     cache_match=$(gh cache list --key "$cache_key" --limit 100 --json key --jq '.[].key' | grep -Fx "$cache_key" || true)
+
+    if [[ $FORCE_BUILD != true && -z $cache_match ]]; then
+        for legacy_commit in "${LEGACY_FINGERPRINT_COMMITS[@]}"; do
+            ensure_git_commit "$legacy_commit"
+            legacy_current_hash=$(calculate_git_hash "$legacy_commit" "${hash_files[@]}")
+            if [[ $legacy_current_hash != "$config_hash" ]]; then
+                continue
+            fi
+
+            legacy_config_hash=$(calculate_git_hash "$legacy_commit" "${legacy_hash_files[@]}")
+            legacy_fingerprint=$(printf '%s\n%s\n%s\n%s\n' "$repo_url" "$repo_branch" "$upstream_sha" "$legacy_config_hash" | sha256sum | awk '{print $1}')
+            legacy_cache_key="upstream-watch-${model}-${legacy_fingerprint}"
+            cache_match=$(gh cache list --key "$legacy_cache_key" --limit 100 --json key --jq '.[].key' | grep -Fx "$legacy_cache_key" || true)
+            if [[ -n $cache_match ]]; then
+                break
+            fi
+        done
+    fi
 
     if [[ $FORCE_BUILD == true || -z $cache_match ]]; then
         matrix=$(jq -c \
