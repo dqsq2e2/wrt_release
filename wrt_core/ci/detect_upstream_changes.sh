@@ -66,9 +66,7 @@ for model in "${MODELS[@]}"; do
         build.sh
         wrt_core/update.sh
         wrt_core/pre_clone_action.sh
-        wrt_core/ci/detect_upstream_changes.sh
         .github/workflows/release_wrt.yml
-        .github/workflows/upstream_watch.yml
     )
 
     IFS=',' read -r -a fragments <<<"$config_fragments"
