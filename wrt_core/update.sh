@@ -116,7 +116,6 @@ stage_pre_install_source_fixes() {
     fix_rust_compile_error
     update_smartdns
     update_mwan3_fw4
-    update_diskman
     if docker_stack_patches_enabled; then
         update_dockerman
     else

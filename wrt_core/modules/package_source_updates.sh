@@ -119,36 +119,6 @@ update_mwan3_fw4() {
 }
 
 
-update_diskman() {
-    local path="$BUILD_DIR/feeds/luci/applications/luci-app-diskman"
-    local repo_url="https://github.com/lisaac/luci-app-diskman.git"
-    if [ -d "$path" ]; then
-        echo "正在更新 diskman..."
-        cd "$BUILD_DIR/feeds/luci/applications" || return
-        \rm -rf "luci-app-diskman"
-
-        if ! git_retry clone --filter=blob:none --no-checkout "$repo_url" diskman; then
-            echo "错误：从 $repo_url 克隆 diskman 仓库失败" >&2
-            exit 1
-        fi
-        cd diskman || return
-
-        git_retry sparse-checkout init --cone
-        git_retry sparse-checkout set applications/luci-app-diskman || return
-
-        git_retry checkout --quiet
-
-        mv applications/luci-app-diskman ../luci-app-diskman || return
-        cd .. || return
-        \rm -rf diskman
-        cd "$BUILD_DIR"
-
-        sed -i 's/fs-ntfs /fs-ntfs3 /g' "$path/Makefile"
-        sed -i '/ntfs-3g-utils /d' "$path/Makefile"
-    fi
-}
-
-
 _sync_luci_lib_docker() {
     local lib_path="$BUILD_DIR/feeds/luci/libs/luci-lib-docker"
     local repo_url="https://github.com/lisaac/luci-lib-docker.git"

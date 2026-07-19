@@ -77,6 +77,63 @@ sync_sparse_packages_to_feed_dir() {
 }
 
 
+sync_all_top_level_packages_to_feed_dir() {
+    local repo_url="$1"
+    local repo_branch="$2"
+    local target_dir="$3"
+    local repo_label="$4"
+    local tmp_root
+    local repo_dir
+    local package_dir
+    local package_name
+    local package_count=0
+    local clone_args=(clone --depth 1 --filter=blob:none)
+
+    tmp_root=$(mktemp -d)
+    repo_dir="$tmp_root/repo"
+
+    if [ -n "$repo_branch" ]; then
+        clone_args+=(-b "$repo_branch")
+    fi
+
+    clone_args+=("$repo_url" "$repo_dir")
+
+    echo "正在从 $repo_label 同步全部顶层软件包..."
+    if ! git_retry "${clone_args[@]}"; then
+        echo "错误：从 $repo_url 克隆 $repo_label 失败" >&2
+        rm -rf "$tmp_root"
+        return 1
+    fi
+
+    for package_dir in "$repo_dir"/*; do
+        if [ ! -d "$package_dir" ] || [ ! -f "$package_dir/Makefile" ]; then
+            continue
+        fi
+
+        package_name=$(basename "$package_dir")
+        rm -rf "$target_dir/$package_name"
+        if ! mv "$package_dir" "$target_dir/"; then
+            echo "错误：无法同步 $repo_label/$package_name" >&2
+            rm -rf "$tmp_root"
+            return 1
+        fi
+        package_count=$((package_count + 1))
+    done
+
+    if ! rm -rf "$tmp_root" 2>/dev/null; then
+        sleep 1
+        rm -rf "$tmp_root" || return 1
+    fi
+
+    if [ "$package_count" -eq 0 ]; then
+        echo "错误：$repo_label 未发现顶层 OpenWrt 软件包目录" >&2
+        return 1
+    fi
+
+    echo "$repo_label 已同步 $package_count 个软件包目录。"
+}
+
+
 sync_repo_root_package_to_feed_dir() {
     local repo_url="$1"
     local repo_branch="$2"
@@ -134,6 +191,19 @@ fix_emmc_health_luci_js_deps() {
 }
 
 
+fix_mini_diskmanager_menu() {
+    local package_dir="$1"
+    local menu_file="$package_dir/root/usr/share/luci/menu.d/luci-app-mini-diskmanager.json"
+
+    if [ ! -f "$menu_file" ]; then
+        echo "错误：Mini Disk Manager 菜单文件不存在：$menu_file" >&2
+        return 1
+    fi
+
+    sed -i 's#admin/services/mini-diskmanager#admin/system/mini-diskmanager#g' "$menu_file"
+}
+
+
 register_local_feed_source() {
     local custom_feed_dir="$1"
     local feeds_path="$2"
@@ -171,7 +241,8 @@ install_custom_feed() {
         luci-app-quickstart luci-app-store luci-app-homeproxy luci-app-mosdns
         luci-app-passwall nikki luci-app-nikki mihomo-meta
         open-app-filter luci-app-oaf lucky luci-app-lucky luci-app-easytier
-        luci-app-emmc-health
+        luci-app-emmc-health luci-app-wolultra luci-app-mini-diskmanager
+        axonhub luci-app-axonhub gecoosac luci-app-gecoosac sing-box
     )
     local custom_feed_sources=()
     local missing_feed_dirs=()
@@ -192,6 +263,7 @@ install_custom_feed() {
     # 统一从外部仓库同步指定包，避免分散维护 feeds.conf。
     custom_feed_sources=(
         "kenzok8/small-package|https://github.com/kenzok8/small-package.git||${base_custom_feed_packages[*]}"
+        "4IceG/luci-app-mini-diskmanager|https://github.com/4IceG/luci-app-mini-diskmanager.git|main|luci-app-mini-diskmanager"
         "sbwml/luci-app-mosdns|https://github.com/sbwml/luci-app-mosdns.git|v5|mosdns luci-app-mosdns"
         "Openwrt-Passwall/openwrt-passwall|https://github.com/Openwrt-Passwall/openwrt-passwall.git|main|luci-app-passwall"
         "nikkinikki-org/OpenWrt-nikki|https://github.com/nikkinikki-org/OpenWrt-nikki.git|main|nikki luci-app-nikki mihomo-meta"
@@ -208,6 +280,14 @@ install_custom_feed() {
     fi
     mkdir -p "$custom_feed_dir"
 
+    # 先导入 VIKINGYFY 整仓；下面的精选来源会覆盖同名包，避免改变现有稳定依赖链。
+    if ! sync_all_top_level_packages_to_feed_dir \
+        "https://github.com/VIKINGYFY/packages.git" "main" \
+        "$custom_feed_dir" "VIKINGYFY/packages"; then
+        rm -rf "$custom_feed_dir"
+        return 1
+    fi
+
     for source_entry in "${custom_feed_sources[@]}"; do
         IFS='|' read -r repo_label repo_url repo_branch repo_packages <<< "$source_entry"
         read -r -a repo_package_array <<< "$repo_packages"
@@ -217,6 +297,11 @@ install_custom_feed() {
             return 1
         fi
     done
+
+    if ! fix_mini_diskmanager_menu "$custom_feed_dir/luci-app-mini-diskmanager"; then
+        rm -rf "$custom_feed_dir"
+        return 1
+    fi
 
     if ! sync_repo_root_package_to_feed_dir "https://github.com/adminchenyu/eMMC-Health.git" "main" "$custom_feed_dir" "adminchenyu/eMMC-Health" "luci-app-emmc-health"; then
         rm -rf "$custom_feed_dir"
