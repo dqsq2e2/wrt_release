@@ -24,6 +24,11 @@ get_custom_feed_package_dir() {
 }
 
 
+supports_ucode_luci_themes() {
+    [ -d "$BUILD_DIR/feeds/luci/modules/luci-base/ucode" ]
+}
+
+
 sync_sparse_packages_to_feed_dir() {
     local repo_url="$1"
     local repo_branch="$2"
@@ -224,6 +229,7 @@ install_custom_feed() {
     local custom_feed_dir
     local custom_feed_worktree_dir
     local custom_feed_name
+    local argon_makefile
 
     local base_custom_feed_packages=(
         xray-core xray-plugin dns2tcp dns2socks haproxy hysteria \
@@ -259,6 +265,12 @@ install_custom_feed() {
     if [ ! -d "$fullconenat_dir" ]; then
         base_custom_feed_packages+=(fullconenat)
     fi
+    if supports_ucode_luci_themes; then
+        required_feed_dirs+=(
+            luci-theme-argon luci-app-argon-config
+            luci-theme-aurora luci-app-aurora-config
+        )
+    fi
 
     # 统一从外部仓库同步指定包，避免分散维护 feeds.conf。
     custom_feed_sources=(
@@ -286,6 +298,47 @@ install_custom_feed() {
         "$custom_feed_dir" "VIKINGYFY/packages"; then
         rm -rf "$custom_feed_dir"
         return 1
+    fi
+
+    if supports_ucode_luci_themes; then
+        if ! sync_sparse_packages_to_feed_dir \
+            "https://github.com/sbwml/luci-theme-argon.git" "openwrt-25.12" \
+            "$custom_feed_dir" "sbwml/luci-theme-argon" \
+            luci-theme-argon luci-app-argon-config; then
+            rm -rf "$custom_feed_dir"
+            return 1
+        fi
+
+        if ! sync_repo_root_package_to_feed_dir \
+            "https://github.com/eamonxg/luci-theme-aurora.git" "master" \
+            "$custom_feed_dir" "eamonxg/luci-theme-aurora" "luci-theme-aurora"; then
+            rm -rf "$custom_feed_dir"
+            return 1
+        fi
+
+        if ! sync_repo_root_package_to_feed_dir \
+            "https://github.com/eamonxg/luci-app-aurora-config.git" "master" \
+            "$custom_feed_dir" "eamonxg/luci-app-aurora-config" "luci-app-aurora-config"; then
+            rm -rf "$custom_feed_dir"
+            return 1
+        fi
+
+        argon_makefile="$custom_feed_dir/luci-theme-argon/Makefile"
+        if [ ! -f "$argon_makefile" ]; then
+            echo "错误：Argon 主题 Makefile 不存在：$argon_makefile" >&2
+            rm -rf "$custom_feed_dir"
+            return 1
+        fi
+        if ! grep -Eq '^LUCI_DEPENDS:=.*\+ucode-mod-math([[:space:]]|$)' "$argon_makefile"; then
+            sed -i '/^LUCI_DEPENDS:=/ s/$/ +ucode-mod-math/' "$argon_makefile"
+        fi
+        if ! grep -Eq '^LUCI_DEPENDS:=.*\+ucode-mod-math([[:space:]]|$)' "$argon_makefile"; then
+            echo "错误：无法为 Argon 主题添加 ucode-mod-math 运行时依赖" >&2
+            rm -rf "$custom_feed_dir"
+            return 1
+        fi
+    else
+        echo "当前 LuCI 不支持 ucode 主题模板，保留上游主题源码。"
     fi
 
     for source_entry in "${custom_feed_sources[@]}"; do

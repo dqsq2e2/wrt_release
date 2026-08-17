@@ -418,6 +418,37 @@ apply_config() {
 
 }
 
+verify_theme_config() {
+    local symbol
+    local required_symbols=(
+        "CONFIG_PACKAGE_luci-theme-bootstrap=y"
+        "CONFIG_PACKAGE_luci-theme-argon=y"
+        "CONFIG_PACKAGE_luci-app-argon-config=y"
+        "CONFIG_PACKAGE_luci-i18n-argon-config-zh-cn=y"
+        "CONFIG_PACKAGE_luci-theme-aurora=y"
+        "CONFIG_PACKAGE_luci-app-aurora-config=y"
+        "CONFIG_PACKAGE_luci-i18n-aurora-config-zh-cn=y"
+        "CONFIG_PACKAGE_ucode-mod-math=y"
+    )
+    local missing_symbols=()
+
+    if [[ ! -d feeds/luci/modules/luci-base/ucode ]]; then
+        return 0
+    fi
+
+    for symbol in "${required_symbols[@]}"; do
+        if ! grep -qxF "$symbol" .config; then
+            missing_symbols+=("$symbol")
+        fi
+    done
+
+    if [[ ${#missing_symbols[@]} -ne 0 ]]; then
+        printf 'Error: make defconfig dropped required LuCI theme settings:\n' >&2
+        printf '  - %s\n' "${missing_symbols[@]}" >&2
+        return 1
+    fi
+}
+
 # 读取设备元信息，确定上游源码和构建目录。
 REPO_URL=$(read_ini_by_key "REPO_URL")
 REPO_BRANCH=$(read_ini_by_key "REPO_BRANCH")
@@ -447,6 +478,7 @@ remove_uhttpd_dependency
 
 cd "$BASE_PATH/../$BUILD_DIR"
 make defconfig
+verify_theme_config
 
 if grep -qE "^CONFIG_TARGET_x86_64=y" "$CONFIG_FILE"; then
     DISTFEEDS_PATH="$BASE_PATH/../$BUILD_DIR/package/emortal/default-settings/files/99-distfeeds.conf"

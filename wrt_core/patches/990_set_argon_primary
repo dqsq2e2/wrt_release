@@ -8,3 +8,8 @@ fi
 uci set argon.@global[0].primary='#6A89CC'
 uci set argon.@global[0].transparency='0.3'
 uci commit argon
+
+if uci get luci.themes.Argon >/dev/null 2>&1; then
+    uci set luci.main.mediaurlbase='/luci-static/argon'
+    uci commit luci
+fi

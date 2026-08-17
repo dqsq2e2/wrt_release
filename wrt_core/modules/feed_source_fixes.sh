@@ -19,6 +19,12 @@ remove_unwanted_packages() {
     local packages_utils=(
         "cups"
     )
+    if supports_ucode_luci_themes; then
+        luci_packages+=(
+            "luci-app-argon-config" "luci-theme-argon"
+            "luci-app-aurora-config" "luci-theme-aurora"
+        )
+    fi
     for pkg in "${luci_packages[@]}"; do
         if [[ -d ./feeds/luci/applications/$pkg ]]; then
             \rm -rf ./feeds/luci/applications/$pkg
