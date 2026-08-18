@@ -4,6 +4,8 @@
 verify_native_apk_repository_support() {
     local apk_makefile="$BUILD_DIR/package/system/apk/Makefile"
     local base_files_makefile="$BUILD_DIR/package/base-files/Makefile"
+    local default_settings_chinese="$BUILD_DIR/package/emortal/default-settings/files/99-default-settings-chinese"
+    local feeds_makefile="$BUILD_DIR/include/feeds.mk"
     local version_makefile="$BUILD_DIR/include/version.mk"
     local keyring_makefile="$BUILD_DIR/package/system/openwrt-keyring/Makefile"
     local native_repo
@@ -16,6 +18,18 @@ verify_native_apk_repository_support() {
     if [ ! -f "$base_files_makefile" ] ||
        ! grep -Fq 'FeedSourcesAppendAPK' "$base_files_makefile"; then
         echo "错误：当前源码不能原生生成 APK distfeeds.list。" >&2
+        return 1
+    fi
+
+    if [ ! -f "$default_settings_chinese" ] ||
+       grep -qE 'mirrors\.vsean\.net/openwrt|downloads\.immortalwrt\.org,\$apk_mirror' "$default_settings_chinese"; then
+        echo "错误：源码仍会把 ImmortalWrt 官方 APK 仓库替换为国内镜像。" >&2
+        return 1
+    fi
+
+    if [ ! -f "$feeds_makefile" ] ||
+       ! grep -Fq '$(filter custom_feed openwrt_bandix luci_app_bandix,$(feed))' "$feeds_makefile"; then
+        echo "错误：仅用于编译的 feeds 仍会被写入运行时 APK 仓库。" >&2
         return 1
     fi
 

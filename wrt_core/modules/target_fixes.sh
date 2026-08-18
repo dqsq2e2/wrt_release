@@ -1,11 +1,51 @@
 #!/usr/bin/env bash
 # target、kernel 与 base system 源码修正。
 
+disable_default_apk_mirror() {
+    local settings_path="$BUILD_DIR/package/emortal/default-settings/files/99-default-settings-chinese"
+
+    if [ ! -f "$settings_path" ]; then
+        echo "错误：当前源码缺少 99-default-settings-chinese。" >&2
+        return 1
+    fi
+
+    python3 - "$settings_path" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+start_marker = "if uci -q get system.@imm_init[0].opkg_mirror"
+end_marker = 'sed -i.bak "s,https://downloads.immortalwrt.org,$apk_mirror,g" "/etc/apk/repositories.d/distfeeds.list"'
+
+if start_marker not in text and end_marker not in text:
+    raise SystemExit(0)
+if start_marker not in text or end_marker not in text:
+    raise SystemExit("99-default-settings-chinese 中的 APK 镜像替换逻辑不完整")
+
+start = text.index(start_marker)
+end = text.index(end_marker, start) + len(end_marker)
+while end < len(text) and text[end] in "\r\n":
+    end += 1
+
+path.write_text(text[:start].rstrip() + "\n\n" + text[end:].lstrip("\r\n"))
+PY
+
+    if grep -qE 'mirrors\.vsean\.net/openwrt|downloads\.immortalwrt\.org,\$apk_mirror' "$settings_path"; then
+        echo "错误：ImmortalWrt APK 国内镜像替换逻辑仍然存在。" >&2
+        return 1
+    fi
+
+    echo "已禁用 APK 国内镜像替换，保留源码原生 ImmortalWrt 官方仓库。"
+}
+
 fix_default_set() {
     # 注入默认主题、系统设置和目标平台通用补丁。
     if [ -d "$BUILD_DIR/feeds/luci/collections/" ]; then
         find "$BUILD_DIR/feeds/luci/collections/" -type f -name "Makefile" -exec sed -i "s/luci-theme-bootstrap/luci-theme-$THEME_SET/g" {} \;
     fi
+
+    disable_default_apk_mirror
 
     install -Dm544 "$BASE_PATH/patches/990_set_argon_primary" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/990_set_argon_primary"
     install -Dm544 "$BASE_PATH/patches/991_custom_settings" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/991_custom_settings"
