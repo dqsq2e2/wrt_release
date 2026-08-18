@@ -30,14 +30,14 @@ if len(matches) != 1:
 
 index = matches[0]
 line = lines[index]
-if "https://downloads.openwrt.org/snapshots" in line:
+if "https://downloads.openwrt.org" in line:
     raise SystemExit(0)
 if "https://downloads.immortalwrt.org" not in line:
     raise SystemExit("include/version.mk 的 VERSION_REPO 不是可识别的官方仓库")
 
 lines[index], count = re.subn(
-    r"https://downloads\.immortalwrt\.org[^)\s]*",
-    "https://downloads.openwrt.org/snapshots",
+    r"https://downloads\.immortalwrt\.org",
+    "https://downloads.openwrt.org",
     line,
     count=1,
 )
@@ -46,7 +46,7 @@ if count != 1:
 path.write_text("".join(lines))
 PY
 
-    echo "已将 APK 默认软件源切换为 OpenWrt 官方 snapshots。"
+    echo "已将 APK 默认软件源切换为 OpenWrt 官方仓库。"
 }
 
 disable_default_apk_mirror() {

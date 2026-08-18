@@ -38,7 +38,7 @@ verify_native_apk_repository_support() {
         return 1
     fi
 
-    native_repo=$(grep -Eo 'https://downloads\.openwrt\.org/snapshots' "$version_makefile" | head -n 1 || true)
+    native_repo=$(grep -Eo 'https://downloads\.openwrt\.org/(snapshots|releases/25\.12-SNAPSHOT)' "$version_makefile" | head -n 1 || true)
     if [ -z "$native_repo" ]; then
         echo "错误：当前源码未配置 OpenWrt 官方 APK 软件源。" >&2
         return 1
