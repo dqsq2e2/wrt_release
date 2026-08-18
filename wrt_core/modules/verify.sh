@@ -23,7 +23,7 @@ verify_native_apk_repository_support() {
 
     if [ ! -f "$default_settings_chinese" ] ||
        grep -qE 'mirrors\.vsean\.net/openwrt|downloads\.immortalwrt\.org,\$apk_mirror' "$default_settings_chinese"; then
-        echo "错误：源码仍会把 ImmortalWrt 官方 APK 仓库替换为国内镜像。" >&2
+        echo "错误：源码仍会把 APK 官方仓库替换为国内镜像。" >&2
         return 1
     fi
 
@@ -38,9 +38,9 @@ verify_native_apk_repository_support() {
         return 1
     fi
 
-    native_repo=$(grep -Eo 'https://downloads\.immortalwrt\.org/[^ )"]+' "$version_makefile" | head -n 1 || true)
+    native_repo=$(grep -Eo 'https://downloads\.openwrt\.org/snapshots' "$version_makefile" | head -n 1 || true)
     if [ -z "$native_repo" ]; then
-        echo "错误：当前源码未配置 ImmortalWrt APK 软件源。" >&2
+        echo "错误：当前源码未配置 OpenWrt 官方 APK 软件源。" >&2
         return 1
     fi
 
@@ -50,7 +50,7 @@ verify_native_apk_repository_support() {
         return 1
     fi
 
-    echo "保留源码原生 APK 软件源：$native_repo"
+    echo "使用 OpenWrt 官方 APK 软件源：$native_repo"
 }
 
 

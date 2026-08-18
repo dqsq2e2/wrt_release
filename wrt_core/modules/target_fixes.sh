@@ -1,6 +1,54 @@
 #!/usr/bin/env bash
 # target、kernel 与 base system 源码修正。
 
+set_official_openwrt_apk_repo() {
+    local version_makefile="$BUILD_DIR/include/version.mk"
+
+    if [ ! -f "$version_makefile" ]; then
+        echo "错误：当前源码缺少 include/version.mk。" >&2
+        return 1
+    fi
+
+    python3 - "$version_makefile" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+lines = path.read_text().splitlines(keepends=True)
+matches = [
+    index
+    for index, line in enumerate(lines)
+    if line.startswith("VERSION_REPO:=")
+    and (
+        "https://downloads.immortalwrt.org" in line
+        or "https://downloads.openwrt.org" in line
+    )
+]
+if len(matches) != 1:
+    raise SystemExit("include/version.mk 中未找到唯一的 VERSION_REPO 定义")
+
+index = matches[0]
+line = lines[index]
+if "https://downloads.openwrt.org/snapshots" in line:
+    raise SystemExit(0)
+if "https://downloads.immortalwrt.org" not in line:
+    raise SystemExit("include/version.mk 的 VERSION_REPO 不是可识别的官方仓库")
+
+lines[index], count = re.subn(
+    r"https://downloads\.immortalwrt\.org[^)\s]*",
+    "https://downloads.openwrt.org/snapshots",
+    line,
+    count=1,
+)
+if count != 1:
+    raise SystemExit("无法替换 include/version.mk 中的 VERSION_REPO")
+path.write_text("".join(lines))
+PY
+
+    echo "已将 APK 默认软件源切换为 OpenWrt 官方 snapshots。"
+}
+
 disable_default_apk_mirror() {
     local settings_path="$BUILD_DIR/package/emortal/default-settings/files/99-default-settings-chinese"
 
@@ -36,7 +84,7 @@ PY
         return 1
     fi
 
-    echo "已禁用 APK 国内镜像替换，保留源码原生 ImmortalWrt 官方仓库。"
+    echo "已禁用 APK 国内镜像替换，保留 OpenWrt 官方软件源。"
 }
 
 fix_default_set() {
@@ -45,6 +93,7 @@ fix_default_set() {
         find "$BUILD_DIR/feeds/luci/collections/" -type f -name "Makefile" -exec sed -i "s/luci-theme-bootstrap/luci-theme-$THEME_SET/g" {} \;
     fi
 
+    set_official_openwrt_apk_repo
     disable_default_apk_mirror
 
     install -Dm544 "$BASE_PATH/patches/990_set_argon_primary" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/990_set_argon_primary"
