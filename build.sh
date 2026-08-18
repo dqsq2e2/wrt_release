@@ -449,6 +449,46 @@ verify_theme_config() {
     fi
 }
 
+verify_apk_config() {
+    local symbol
+    local required_symbols=(
+        "CONFIG_USE_APK=y"
+        "CONFIG_SIGNED_PACKAGES=y"
+        "CONFIG_PACKAGE_apk-openssl=y"
+        "CONFIG_PACKAGE_luci-app-store=y"
+    )
+    local forbidden_symbols=(
+        "CONFIG_PACKAGE_opkg=y"
+        "CONFIG_PACKAGE_luci-lib-ipkg=y"
+    )
+    local missing_symbols=()
+    local enabled_forbidden_symbols=()
+
+    for symbol in "${required_symbols[@]}"; do
+        if ! grep -qxF "$symbol" .config; then
+            missing_symbols+=("$symbol")
+        fi
+    done
+
+    for symbol in "${forbidden_symbols[@]}"; do
+        if grep -qxF "$symbol" .config; then
+            enabled_forbidden_symbols+=("$symbol")
+        fi
+    done
+
+    if [[ ${#missing_symbols[@]} -ne 0 ]]; then
+        printf 'Error: make defconfig dropped required APK settings:\n' >&2
+        printf '  - %s\n' "${missing_symbols[@]}" >&2
+        return 1
+    fi
+
+    if [[ ${#enabled_forbidden_symbols[@]} -ne 0 ]]; then
+        printf 'Error: OPKG-only packages are still enabled in APK mode:\n' >&2
+        printf '  - %s\n' "${enabled_forbidden_symbols[@]}" >&2
+        return 1
+    fi
+}
+
 # 读取设备元信息，确定上游源码和构建目录。
 REPO_URL=$(read_ini_by_key "REPO_URL")
 REPO_BRANCH=$(read_ini_by_key "REPO_BRANCH")
@@ -479,13 +519,7 @@ remove_uhttpd_dependency
 cd "$BASE_PATH/../$BUILD_DIR"
 make defconfig
 verify_theme_config
-
-if grep -qE "^CONFIG_TARGET_x86_64=y" "$CONFIG_FILE"; then
-    DISTFEEDS_PATH="$BASE_PATH/../$BUILD_DIR/package/emortal/default-settings/files/99-distfeeds.conf"
-    if [ -d "${DISTFEEDS_PATH%/*}" ] && [ -f "$DISTFEEDS_PATH" ]; then
-        sed -i 's/aarch64_cortex-a53/x86_64/g' "$DISTFEEDS_PATH"
-    fi
-fi
+verify_apk_config
 
 if [[ $Build_Mod == "debug" ]]; then
     exit 0

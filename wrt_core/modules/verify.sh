@@ -10,6 +10,7 @@ verify_custom_feed_installed_paths() {
         luci-app-passwall nikki luci-app-nikki mihomo-meta luci-app-emmc-health
         luci-app-wolultra luci-app-mini-diskmanager luci-app-homeproxy sing-box
         axonhub luci-app-axonhub gecoosac luci-app-gecoosac
+        taskd luci-lib-xterm luci-lib-taskd luci-app-store
     )
     local missing_package_dirs=()
 

@@ -41,6 +41,7 @@ sync_sparse_packages_to_feed_dir() {
     local missing_packages=()
     local clone_args=(clone --depth 1 --filter=blob:none --sparse)
     local pkg
+    local package_name
 
     tmp_dir=$(mktemp -d)
 
@@ -65,8 +66,9 @@ sync_sparse_packages_to_feed_dir() {
 
     for pkg in "${packages[@]}"; do
         if [ -d "$tmp_dir/$pkg" ]; then
-            rm -rf "$target_dir/$pkg"
-            mv "$tmp_dir/$pkg" "$target_dir/"
+            package_name=$(basename "$pkg")
+            rm -rf "$target_dir/$package_name"
+            mv "$tmp_dir/$pkg" "$target_dir/$package_name"
         else
             missing_packages+=("$pkg")
         fi
@@ -180,6 +182,31 @@ sync_repo_root_package_to_feed_dir() {
 }
 
 
+verify_istore_apk_support() {
+    local package_dir="$1"
+    local makefile_path="$package_dir/Makefile"
+    local wrapper_path="$package_dir/root/bin/is-opkg"
+    local compat_repo_path="$package_dir/src/root-apk/etc/apk/repositories.d/compat.list"
+
+    if [ ! -f "$makefile_path" ] || \
+       ! grep -Fq 'USE_APK="$(CONFIG_USE_APK)"' "$makefile_path"; then
+        echo "错误：当前 luci-app-store 源码未启用 CONFIG_USE_APK 构建支持" >&2
+        return 1
+    fi
+
+    if [ ! -f "$wrapper_path" ] || \
+       ! grep -Fq 'FEEDS_SERVER=https://istore.istoreos.com/repo-apk' "$wrapper_path"; then
+        echo "错误：当前 luci-app-store 缺少 APK 软件仓库支持" >&2
+        return 1
+    fi
+
+    if [ ! -f "$compat_repo_path" ]; then
+        echo "错误：当前 luci-app-store 缺少 APK 兼容仓库配置" >&2
+        return 1
+    fi
+}
+
+
 fix_emmc_health_luci_js_deps() {
     local package_dir="$1"
     local makefile_path="$package_dir/Makefile"
@@ -236,15 +263,16 @@ install_custom_feed() {
         naiveproxy shadowsocks-rust sing-box v2ray-core v2ray-geodata geoview v2ray-plugin \
         tuic-client chinadns-ng ipt2socks tcping trojan-plus simple-obfs shadowsocksr-libev \
         v2dat adguardhome luci-app-adguardhome ddns-go \
-        luci-app-ddns-go taskd luci-lib-xterm luci-lib-taskd luci-app-store quickstart \
+        luci-app-ddns-go quickstart \
         luci-app-quickstart luci-app-istorex luci-app-cloudflarespeedtest netdata luci-app-netdata \
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
         oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
         msd_lite luci-app-msd_lite cups luci-app-cupsd
     )
     local required_feed_dirs=(
-        cups tcping v2ray-geodata luci-lib-taskd luci-app-openclash
-        luci-app-quickstart luci-app-store luci-app-homeproxy luci-app-mosdns
+        cups tcping v2ray-geodata taskd luci-lib-xterm luci-lib-taskd luci-app-store
+        luci-app-openclash
+        luci-app-quickstart luci-app-homeproxy luci-app-mosdns
         luci-app-passwall nikki luci-app-nikki mihomo-meta
         open-app-filter luci-app-oaf lucky luci-app-lucky luci-app-easytier
         luci-app-emmc-health luci-app-wolultra luci-app-mini-diskmanager
@@ -275,6 +303,7 @@ install_custom_feed() {
     # 统一从外部仓库同步指定包，避免分散维护 feeds.conf。
     custom_feed_sources=(
         "kenzok8/small-package|https://github.com/kenzok8/small-package.git||${base_custom_feed_packages[*]}"
+        "linkease/istore|https://github.com/linkease/istore.git|main|luci/taskd luci/luci-lib-xterm luci/luci-lib-taskd luci/luci-app-store"
         "4IceG/luci-app-mini-diskmanager|https://github.com/4IceG/luci-app-mini-diskmanager.git|main|luci-app-mini-diskmanager"
         "sbwml/luci-app-mosdns|https://github.com/sbwml/luci-app-mosdns.git|v5|mosdns luci-app-mosdns"
         "Openwrt-Passwall/openwrt-passwall|https://github.com/Openwrt-Passwall/openwrt-passwall.git|main|luci-app-passwall"
@@ -350,6 +379,11 @@ install_custom_feed() {
             return 1
         fi
     done
+
+    if ! verify_istore_apk_support "$custom_feed_dir/luci-app-store"; then
+        rm -rf "$custom_feed_dir"
+        return 1
+    fi
 
     if ! fix_mini_diskmanager_menu "$custom_feed_dir/luci-app-mini-diskmanager"; then
         rm -rf "$custom_feed_dir"

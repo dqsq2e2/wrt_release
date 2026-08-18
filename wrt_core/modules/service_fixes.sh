@@ -43,27 +43,42 @@ EOF
 }
 
 
-install_opkg_distfeeds() {
-    local emortal_def_dir="$BUILD_DIR/package/emortal/default-settings"
-    local distfeeds_conf="$emortal_def_dir/files/99-distfeeds.conf"
+install_apk_distfeeds() {
+    local apk_release="${OPENWRT_APK_RELEASE:-25.12.5}"
+    local config_build="$BUILD_DIR/config/Config-build.in"
+    local apk_makefile="$BUILD_DIR/package/system/apk/Makefile"
+    local uci_defaults_dir="$BUILD_DIR/package/base-files/files/etc/uci-defaults"
+    local distfeeds_script="$uci_defaults_dir/99-apk-distfeeds"
 
-    if [ -d "$emortal_def_dir" ] && [ ! -f "$distfeeds_conf" ]; then
-        cat <<'EOF' >"$distfeeds_conf"
-src/gz openwrt_base https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/packages/aarch64_cortex-a53/base/
-src/gz openwrt_luci https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/packages/aarch64_cortex-a53/luci/
-src/gz openwrt_packages https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/packages/aarch64_cortex-a53/packages/
-src/gz openwrt_routing https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/packages/aarch64_cortex-a53/routing/
-src/gz openwrt_telephony https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/packages/aarch64_cortex-a53/telephony/
+    if [ ! -f "$apk_makefile" ] || ! grep -q '^[[:space:]]*config USE_APK$' "$config_build"; then
+        echo "错误：当前源码不支持 CONFIG_USE_APK，不能构建 APK 固件" >&2
+        return 1
+    fi
+
+    mkdir -p "$uci_defaults_dir"
+    cat <<'EOF' >"$distfeeds_script"
+#!/bin/sh
+
+repo_base="https://downloads.openwrt.org/releases/@APK_RELEASE@"
+arch="$(awk 'NF { print $1; exit }' /etc/apk/arch 2>/dev/null)"
+
+[ -n "$arch" ] || exit 1
+
+mkdir -p /etc/apk/repositories.d
+cat > /etc/apk/repositories.d/distfeeds.list <<REPOSITORIES
+$repo_base/packages/$arch/base/packages.adb
+$repo_base/packages/$arch/luci/packages.adb
+$repo_base/packages/$arch/packages/packages.adb
+$repo_base/packages/$arch/routing/packages.adb
+$repo_base/packages/$arch/telephony/packages.adb
+REPOSITORIES
+
+exit 0
 EOF
 
-        sed -i "/define Package\/default-settings\/install/a\\
-\\t\$(INSTALL_DIR) \$(1)/etc\\n\
-\t\$(INSTALL_DATA) ./files/99-distfeeds.conf \$(1)/etc/99-distfeeds.conf\n" $emortal_def_dir/Makefile
-
-        sed -i "/exit 0/i\\
-[ -f \'/etc/99-distfeeds.conf\' ] && mv \'/etc/99-distfeeds.conf\' \'/etc/opkg/distfeeds.conf\'\n\
-sed -ri \'/check_signature/s@^[^#]@#&@\' /etc/opkg.conf\n" $emortal_def_dir/files/99-default-settings
-    fi
+    sed -i "s/@APK_RELEASE@/$apk_release/g" "$distfeeds_script"
+    chmod +x "$distfeeds_script"
+    echo "已配置 OpenWrt $apk_release APK 软件源。"
 }
 
 
@@ -126,15 +141,6 @@ fix_openssl_ktls() {
         echo "正在更新 OpenSSL kTLS 配置..."
         sed -i 's/select PACKAGE_kmod-tls/depends on PACKAGE_kmod-tls/g' "$config_in"
         sed -i '/depends on PACKAGE_kmod-tls/a\\tdefault y if PACKAGE_kmod-tls' "$config_in"
-    fi
-}
-
-
-fix_opkg_check() {
-    local patch_file="$BASE_PATH/patches/001-fix-provides-version-parsing.patch"
-    local opkg_dir="$BUILD_DIR/package/system/opkg"
-    if [ -f "$patch_file" ]; then
-        install -Dm644 "$patch_file" "$opkg_dir/patches/001-fix-provides-version-parsing.patch"
     fi
 }
 
