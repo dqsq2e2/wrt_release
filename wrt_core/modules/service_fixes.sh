@@ -43,45 +43,6 @@ EOF
 }
 
 
-install_apk_distfeeds() {
-    local apk_release="${OPENWRT_APK_RELEASE:-25.12.5}"
-    local config_build="$BUILD_DIR/config/Config-build.in"
-    local apk_makefile="$BUILD_DIR/package/system/apk/Makefile"
-    local uci_defaults_dir="$BUILD_DIR/package/base-files/files/etc/uci-defaults"
-    local distfeeds_script="$uci_defaults_dir/99-apk-distfeeds"
-
-    if [ ! -f "$apk_makefile" ] || ! grep -q '^[[:space:]]*config USE_APK$' "$config_build"; then
-        echo "错误：当前源码不支持 CONFIG_USE_APK，不能构建 APK 固件" >&2
-        return 1
-    fi
-
-    mkdir -p "$uci_defaults_dir"
-    cat <<'EOF' >"$distfeeds_script"
-#!/bin/sh
-
-repo_base="https://downloads.openwrt.org/releases/@APK_RELEASE@"
-arch="$(awk 'NF { print $1; exit }' /etc/apk/arch 2>/dev/null)"
-
-[ -n "$arch" ] || exit 1
-
-mkdir -p /etc/apk/repositories.d
-cat > /etc/apk/repositories.d/distfeeds.list <<REPOSITORIES
-$repo_base/packages/$arch/base/packages.adb
-$repo_base/packages/$arch/luci/packages.adb
-$repo_base/packages/$arch/packages/packages.adb
-$repo_base/packages/$arch/routing/packages.adb
-$repo_base/packages/$arch/telephony/packages.adb
-REPOSITORIES
-
-exit 0
-EOF
-
-    sed -i "s/@APK_RELEASE@/$apk_release/g" "$distfeeds_script"
-    chmod +x "$distfeeds_script"
-    echo "已配置 OpenWrt $apk_release APK 软件源。"
-}
-
-
 update_script_priority() {
     local qca_drv_path="$BUILD_DIR/package/feeds/nss_packages/qca-nss-drv/files/qca-nss-drv.init"
     if [ -d "${qca_drv_path%/*}" ] && [ -f "$qca_drv_path" ]; then

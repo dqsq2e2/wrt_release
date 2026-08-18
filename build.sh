@@ -455,6 +455,7 @@ verify_apk_config() {
         "CONFIG_USE_APK=y"
         "CONFIG_SIGNED_PACKAGES=y"
         "CONFIG_PACKAGE_apk-openssl=y"
+        "CONFIG_PACKAGE_openwrt-keyring=y"
         "CONFIG_PACKAGE_luci-app-store=y"
     )
     local forbidden_symbols=(

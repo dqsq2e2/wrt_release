@@ -1,6 +1,45 @@
 #!/usr/bin/env bash
 # 构建树一致性检查。
 
+verify_native_apk_repository_support() {
+    local apk_makefile="$BUILD_DIR/package/system/apk/Makefile"
+    local base_files_makefile="$BUILD_DIR/package/base-files/Makefile"
+    local version_makefile="$BUILD_DIR/include/version.mk"
+    local keyring_makefile="$BUILD_DIR/package/system/openwrt-keyring/Makefile"
+    local native_repo
+
+    if [ ! -f "$apk_makefile" ]; then
+        echo "错误：当前源码缺少 APK 包管理器。" >&2
+        return 1
+    fi
+
+    if [ ! -f "$base_files_makefile" ] ||
+       ! grep -Fq 'FeedSourcesAppendAPK' "$base_files_makefile"; then
+        echo "错误：当前源码不能原生生成 APK distfeeds.list。" >&2
+        return 1
+    fi
+
+    if [ ! -f "$version_makefile" ]; then
+        echo "错误：当前源码缺少版本仓库配置。" >&2
+        return 1
+    fi
+
+    native_repo=$(grep -Eo 'https://downloads\.immortalwrt\.org/[^ )"]+' "$version_makefile" | head -n 1 || true)
+    if [ -z "$native_repo" ]; then
+        echo "错误：当前源码未配置 ImmortalWrt APK 软件源。" >&2
+        return 1
+    fi
+
+    if [ ! -f "$keyring_makefile" ] ||
+       ! grep -qE 'apk/immortalwrt-[^ ]+\.pem' "$keyring_makefile"; then
+        echo "错误：当前源码缺少 ImmortalWrt APK 签名公钥。" >&2
+        return 1
+    fi
+
+    echo "保留源码原生 APK 软件源：$native_repo"
+}
+
+
 verify_custom_feed_installed_paths() {
     local custom_feed_name
     local custom_feed_package_dir

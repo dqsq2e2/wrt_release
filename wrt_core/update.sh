@@ -125,7 +125,7 @@ stage_pre_install_source_fixes() {
     update_uwsgi_limit_as
     update_nginx_ubus_module
     check_default_settings
-    install_apk_distfeeds
+    verify_native_apk_repository_support
     fix_easytier_mk
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
