@@ -119,6 +119,35 @@ update_mwan3_fw4() {
 }
 
 
+_normalize_dockerman_apk_version() {
+    local makefile_path="$1"
+    local package_name="$2"
+    local package_version
+
+    if [ ! -f "$makefile_path" ]; then
+        echo "错误：未找到 $package_name Makefile：$makefile_path" >&2
+        return 1
+    fi
+
+    package_version=$(sed -n 's/^PKG_VERSION[[:space:]]*:=[[:space:]]*//p' "$makefile_path" | head -n 1)
+    if [ -z "$package_version" ]; then
+        echo "错误：$package_name Makefile 中未找到 PKG_VERSION。" >&2
+        return 1
+    fi
+
+    if [[ "$package_version" =~ ^v[0-9] ]]; then
+        sed -i -E 's/^(PKG_VERSION[[:space:]]*:=[[:space:]]*)v([0-9])/\1\2/' "$makefile_path"
+        package_version=${package_version#v}
+        echo "$package_name APK 包版本已规范化为 $package_version"
+    fi
+
+    if grep -qE '^PKG_VERSION[[:space:]]*:=[[:space:]]*v[0-9]' "$makefile_path"; then
+        echo "错误：$package_name 的 PKG_VERSION 仍以 v 开头，APK 无法打包。" >&2
+        return 1
+    fi
+}
+
+
 _sync_luci_lib_docker() {
     local lib_path="$BUILD_DIR/feeds/luci/libs/luci-lib-docker"
     local repo_url="https://github.com/lisaac/luci-lib-docker.git"
@@ -145,6 +174,8 @@ _sync_luci_lib_docker() {
         cd "$BUILD_DIR"
         echo "luci-lib-docker 同步完成"
     fi
+
+    _normalize_dockerman_apk_version "$lib_path/Makefile" "luci-lib-docker" || return 1
 }
 
 
@@ -174,6 +205,8 @@ update_dockerman() {
         cd .. || return
         \rm -rf dockerman
         cd "$BUILD_DIR"
+
+        _normalize_dockerman_apk_version "$path/Makefile" "luci-app-dockerman" || return 1
 
         if declare -F docker_stack_sync_dockerman_nftables_compat >/dev/null 2>&1; then
             docker_stack_sync_dockerman_nftables_compat "$BUILD_DIR" "0" || return 1
