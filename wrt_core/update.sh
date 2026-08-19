@@ -125,7 +125,7 @@ stage_pre_install_source_fixes() {
     update_uwsgi_limit_as
     update_nginx_ubus_module
     check_default_settings
-    install_opkg_distfeeds
+    verify_native_apk_repository_support
     fix_easytier_mk
     remove_attendedsysupgrade
     fix_kconfig_recursive_dependency
@@ -150,7 +150,6 @@ stage_post_install_package_fixes() {
     update_script_priority
     update_geoip
     fix_openssl_ktls
-    fix_opkg_check
     fix_netfilter_kmod_clash
     fix_quectel_cm
     install_pbr_cmcc

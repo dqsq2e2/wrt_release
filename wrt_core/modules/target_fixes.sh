@@ -1,11 +1,100 @@
 #!/usr/bin/env bash
 # target、kernel 与 base system 源码修正。
 
+set_official_openwrt_apk_repo() {
+    local version_makefile="$BUILD_DIR/include/version.mk"
+
+    if [ ! -f "$version_makefile" ]; then
+        echo "错误：当前源码缺少 include/version.mk。" >&2
+        return 1
+    fi
+
+    python3 - "$version_makefile" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+lines = path.read_text().splitlines(keepends=True)
+matches = [
+    index
+    for index, line in enumerate(lines)
+    if line.startswith("VERSION_REPO:=")
+    and (
+        "https://downloads.immortalwrt.org" in line
+        or "https://downloads.openwrt.org" in line
+    )
+]
+if len(matches) != 1:
+    raise SystemExit("include/version.mk 中未找到唯一的 VERSION_REPO 定义")
+
+index = matches[0]
+line = lines[index]
+if "https://downloads.openwrt.org" in line:
+    raise SystemExit(0)
+if "https://downloads.immortalwrt.org" not in line:
+    raise SystemExit("include/version.mk 的 VERSION_REPO 不是可识别的官方仓库")
+
+lines[index], count = re.subn(
+    r"https://downloads\.immortalwrt\.org",
+    "https://downloads.openwrt.org",
+    line,
+    count=1,
+)
+if count != 1:
+    raise SystemExit("无法替换 include/version.mk 中的 VERSION_REPO")
+path.write_text("".join(lines))
+PY
+
+    echo "已将 APK 默认软件源切换为 OpenWrt 官方仓库。"
+}
+
+disable_default_apk_mirror() {
+    local settings_path="$BUILD_DIR/package/emortal/default-settings/files/99-default-settings-chinese"
+
+    if [ ! -f "$settings_path" ]; then
+        echo "错误：当前源码缺少 99-default-settings-chinese。" >&2
+        return 1
+    fi
+
+    python3 - "$settings_path" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+start_marker = "if uci -q get system.@imm_init[0].opkg_mirror"
+end_marker = 'sed -i.bak "s,https://downloads.immortalwrt.org,$apk_mirror,g" "/etc/apk/repositories.d/distfeeds.list"'
+
+if start_marker not in text and end_marker not in text:
+    raise SystemExit(0)
+if start_marker not in text or end_marker not in text:
+    raise SystemExit("99-default-settings-chinese 中的 APK 镜像替换逻辑不完整")
+
+start = text.index(start_marker)
+end = text.index(end_marker, start) + len(end_marker)
+while end < len(text) and text[end] in "\r\n":
+    end += 1
+
+path.write_text(text[:start].rstrip() + "\n\n" + text[end:].lstrip("\r\n"))
+PY
+
+    if grep -qE 'mirrors\.vsean\.net/openwrt|downloads\.immortalwrt\.org,\$apk_mirror' "$settings_path"; then
+        echo "错误：ImmortalWrt APK 国内镜像替换逻辑仍然存在。" >&2
+        return 1
+    fi
+
+    echo "已禁用 APK 国内镜像替换，保留 OpenWrt 官方软件源。"
+}
+
 fix_default_set() {
     # 注入默认主题、系统设置和目标平台通用补丁。
     if [ -d "$BUILD_DIR/feeds/luci/collections/" ]; then
         find "$BUILD_DIR/feeds/luci/collections/" -type f -name "Makefile" -exec sed -i "s/luci-theme-bootstrap/luci-theme-$THEME_SET/g" {} \;
     fi
+
+    set_official_openwrt_apk_repo
+    disable_default_apk_mirror
 
     install -Dm544 "$BASE_PATH/patches/990_set_argon_primary" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/990_set_argon_primary"
     install -Dm544 "$BASE_PATH/patches/991_custom_settings" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/991_custom_settings"
