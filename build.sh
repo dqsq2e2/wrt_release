@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -e
+set -o pipefail
 
 # 定位 wrt_core，兼容仓库根目录或上级目录调用。
 if [ -d "wrt_core" ]; then
@@ -490,6 +491,56 @@ verify_apk_config() {
     fi
 }
 
+retry_failed_downloads_verbose() {
+    local download_log=$1
+    local package_target
+    local failed_packages=()
+
+    mapfile -t failed_packages < <(
+        sed -nE 's/.*ERROR: ([^[:space:]]+) failed to build.*/\1/p' "$download_log" | sort -u
+    )
+
+    for package_target in "${failed_packages[@]}"; do
+        echo "Verbose download retry: $package_target"
+        make "$package_target/download" V=s || true
+    done
+}
+
+preflight_download_sources() {
+    local download_jobs
+    local download_log
+    local download_failed=0
+    local failure_pattern
+
+    download_jobs=$(($(nproc) * 2))
+    download_log=$(mktemp)
+    failure_pattern='ERROR: .* failed to build|make .*download: build failed|Hash mismatch|No more mirrors to try - giving up'
+
+    echo "预下载并校验全部源码包，发现错误将停止编译..."
+    if ! make download -j"$download_jobs" 2>&1 | tee "$download_log"; then
+        download_failed=1
+    fi
+
+    if grep -Eq "$failure_pattern" "$download_log"; then
+        download_failed=1
+    fi
+
+    if (( download_failed != 0 )); then
+        echo "Error: 源码包预下载或校验失败，已在正式编译前停止。" >&2
+        grep -E "$failure_pattern" "$download_log" | tail -n 30 >&2 || true
+        retry_failed_downloads_verbose "$download_log"
+        if [[ -n ${GITHUB_STEP_SUMMARY:-} ]]; then
+            echo "### 源码包预检失败" >> "$GITHUB_STEP_SUMMARY"
+            echo "已在正式编译前停止，请查看 Build Firmware 步骤中的详细下载日志。" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        rm -f "$download_log"
+        return 1
+    fi
+
+    rm -f "$download_log"
+    echo "源码包预下载与校验通过。"
+}
+
 # 读取设备元信息，确定上游源码和构建目录。
 REPO_URL=$(read_ini_by_key "REPO_URL")
 REPO_BRANCH=$(read_ini_by_key "REPO_BRANCH")
@@ -539,7 +590,7 @@ if [[ -d $TARGET_DIR ]]; then
     find "$TARGET_DIR" -type f \( -name "*.bin" -o -name "*.manifest" -o -name "*efi.img.gz" -o -name "*.itb" -o -name "*.fip" -o -name "*.ubi" -o -name "*rootfs.tar.gz" \) -exec rm -f {} +
 fi
 
-make download -j$(($(nproc) * 2))
+preflight_download_sources
 make -j$(($(nproc) + 1)) || make -j1 V=s
 
 FIRMWARE_DIR="$BASE_PATH/../firmware"

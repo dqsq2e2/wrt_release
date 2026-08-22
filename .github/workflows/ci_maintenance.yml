@@ -2,7 +2,7 @@ name: CI Maintenance
 
 on:
   schedule:
-    - cron: "23 20 * * 0"
+    - cron: "23 20 * * *"
   workflow_dispatch:
 
 permissions:
@@ -15,6 +15,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
 
 jobs:
   cleanup:
@@ -22,6 +23,7 @@ jobs:
     steps:
       - name: Prune Old Dependency Caches
         run: |
+          set -euo pipefail
           cutoff=$(date -u -d '14 days ago' +%s)
           gh cache list --limit 10000 --json key,lastAccessedAt | jq -r '.[] | [.key, .lastAccessedAt] | @tsv' | \
           while IFS=$'\t' read -r key last_accessed; do
@@ -29,41 +31,56 @@ jobs:
             cache_time=$(date -u -d "$last_accessed" +%s)
             if (( cache_time < cutoff )); then
               echo "Deleting cache: $key"
-              gh cache delete "$key" || true
+              gh cache delete "$key"
             fi
           done
 
       - name: Keep Recent Upstream Markers
         run: |
+          set -euo pipefail
           for model in MEDIATEK-WIFI-YES MEDIATEK-WIFI-NO clx_s20p_immwrt jdcloud_ax6000_immwrt; do
             gh cache list --key "upstream-watch-$model-" --limit 100 --json key,createdAt | \
               jq -r 'sort_by(.createdAt) | reverse | .[5:] | .[].key' | \
               while read -r key; do
-                [[ -n "$key" ]] && gh cache delete "$key" || true
+                if [[ -n "$key" ]]; then
+                  gh cache delete "$key"
+                fi
               done
           done
 
       - name: Prune Old Workflow Runs
         run: |
+          set -euo pipefail
           cutoff=$(date -u -d '3 days ago' +%s)
-          gh run list --limit 500 --json databaseId,createdAt,status | jq -r '.[] | select(.status == "completed") | [.databaseId, .createdAt] | @tsv' | \
+          run_list=$(mktemp)
+          trap 'rm -f "$run_list"' EXIT
+          deleted_count=0
+
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | select(.status == "completed") | [.id, .created_at] | @tsv' > "$run_list"
+
           while IFS=$'\t' read -r run_id created_at; do
             run_time=$(date -u -d "$created_at" +%s)
             if (( run_time < cutoff )); then
               echo "Deleting workflow run: $run_id"
-              gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" || true
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id"
+              deleted_count=$((deleted_count + 1))
             fi
-          done
+          done < "$run_list"
+
+          echo "Deleted $deleted_count completed workflow runs older than 3 days."
+          echo "- Deleted workflow runs: $deleted_count" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep Recent Monitored Releases
         run: |
+          set -euo pipefail
           for model in MEDIATEK-WIFI-YES MEDIATEK-WIFI-NO clx_s20p_immwrt jdcloud_ax6000_immwrt; do
             gh release list --limit 100 --json tagName,publishedAt | \
               jq -r --arg suffix "_$model" 'sort_by(.publishedAt) | reverse | map(select(.tagName | endswith($suffix))) | .[2:] | .[].tagName' | \
               while read -r tag; do
                 if [[ -n "$tag" ]]; then
                   echo "Deleting release: $tag"
-                  gh release delete "$tag" --cleanup-tag --yes || true
+                  gh release delete "$tag" --cleanup-tag --yes
                 fi
               done
           done
