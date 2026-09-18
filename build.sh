@@ -516,6 +516,14 @@ preflight_download_sources() {
     download_log=$(mktemp)
     failure_pattern='ERROR: .* failed to build|make .*download: build failed|Hash mismatch|No more mirrors to try - giving up'
 
+    # 播种 dl/：wrt_core/dl 里放着本机验证过哈希的 tarball（如镜像站尚未收录
+    # 的新版本包；git 回退再打包的哈希随工具链版本变化，CI 上无法复现）。
+    # no-clobber，只补缺不覆盖。
+    if [ -d "$BASE_PATH/dl" ]; then
+        mkdir -p "$BUILD_DIR/dl"
+        cp -rn "$BASE_PATH"/dl/* "$BUILD_DIR/dl/" 2>/dev/null || true
+    fi
+
     echo "预下载并校验全部源码包，发现错误将停止编译..."
     if ! make download -j"$download_jobs" 2>&1 | tee "$download_log"; then
         download_failed=1
