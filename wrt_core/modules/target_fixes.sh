@@ -163,6 +163,13 @@ apply_custom_feed_patches() {
         echo "Patched quickstart index.js linkState disconnected check"
     fi
 
+    # Disk-info entries link to luci-app-diskman, but our builds ship
+    # luci-app-mini-diskmanager (both hrefs are the same diskman URL).
+    if [ -f "$qs_js" ] && grep -q "admin/system/diskman" "$qs_js"; then
+        sed -i 's|admin/system/diskman|admin/system/mini-diskmanager|g' "$qs_js"
+        echo "Patched quickstart index.js diskman -> mini-diskmanager link"
+    fi
+
     # argon base font is 0.975rem (15.6px vs bootstrap 13px); use 0.875rem
     # (14px). The sidenav brand title (1.8rem) overflows its column; use
     # 1.4rem. Match bare values: upstream ships both minified and formatted
