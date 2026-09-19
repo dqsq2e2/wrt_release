@@ -312,6 +312,7 @@ install_custom_feed() {
     local feeds_path
     local fullconenat_nft_dir="$BUILD_DIR/package/network/utils/fullconenat-nft"
     local fullconenat_dir="$BUILD_DIR/package/network/utils/fullconenat"
+    local fullconenat_sonic_dir="$BUILD_DIR/package/network/utils/fullconenat-sonic"
     local custom_feed_dir
     local custom_feed_worktree_dir
     local custom_feed_name
@@ -347,10 +348,13 @@ install_custom_feed() {
     local repo_packages
     local repo_package_array=()
 
-    if [ ! -d "$fullconenat_nft_dir" ]; then
+    # Trees with fullconenat-sonic (owrt >= 6af6d3945c) embed fullcone into
+    # nf_nat/xt_MASQUERADE and ship no standalone fullconenat packages;
+    # never fall back to the legacy custom_feed builds there.
+    if [ ! -d "$fullconenat_nft_dir" ] && [ ! -d "$fullconenat_sonic_dir" ]; then
         base_custom_feed_packages+=(fullconenat-nft)
     fi
-    if [ ! -d "$fullconenat_dir" ]; then
+    if [ ! -d "$fullconenat_dir" ] && [ ! -d "$fullconenat_sonic_dir" ]; then
         base_custom_feed_packages+=(fullconenat)
     fi
     if supports_ucode_luci_themes; then
