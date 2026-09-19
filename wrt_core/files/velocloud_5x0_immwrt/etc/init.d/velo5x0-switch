@@ -133,9 +133,11 @@ fan_up() {
 	# cut the BIOS 100%-duty boot scream: park the fan at ~30% until
 	# velo5x0-fan (START=20) takes over with the real curve
 	E 0x40 0x30
-	# PCA9557@0x1c pin 6 (FORCE_PWM) low, pin 7 (FORCE_12V) high: the only
-	# combination where the fan follows the PWM duty (see velo5x0-fand).
-	# Pins 0/1 are PoE control: never touch them.
+	# PCA9557@0x1c pin 6 (FORCE_PWM) high, pin 7 (FORCE_12V) low: the raw
+	# 26 kHz PWM reaches the fan's PWM pin. Strap-sweep verified (2026-09):
+	# pin6 low routes the drive through the board's chopper (fan sees chopped
+	# 12V, speed barely tracks duty); pin6 high gives true proportional PWM
+	# (duty 4%..100% -> ~2.4k..11k RPM). Pins 0/1 are PoE: never touch them.
 	[ -d /sys/bus/i2c/devices/9-001c ] || echo pca9557 0x1c > /sys/bus/i2c/devices/i2c-9/new_device
 	sleep 1
 	b2=""
@@ -147,7 +149,7 @@ fan_up() {
 			g=$(( b2 + p ))
 			[ -d /sys/class/gpio/gpio$g ] || echo $g > /sys/class/gpio/export
 			echo out > /sys/class/gpio/gpio$g/direction
-			echo $(( p - 6 )) > /sys/class/gpio/gpio$g/value
+			echo $(( 7 - p )) > /sys/class/gpio/gpio$g/value
 		done
 	fi
 	echo "fan: EMC2104 in PWM mode, temps $(i2cget -y 9 0x2f 0)/$(i2cget -y 9 0x2f 2)/$(i2cget -y 9 0x2f 4)/$(i2cget -y 9 0x2f 6) C"

@@ -2,8 +2,8 @@
 # VeloCloud Edge 5x0 fan control: software closed loop on the EMC2104 tach.
 # 520V 完美固件 edition: one config serves 2-wire, 3-wire and 4-wire fans.
 #
-# The fan is a 4-pin PWM unit.  With PCA9557@0x1c pin 6 (FORCE_PWM) low and
-# pin 7 (FORCE_12V) high the chip's 26 kHz PWM reaches the fan's PWM pin and
+# The fan is a 4-pin PWM unit.  With PCA9557@0x1c pin 6 (FORCE_PWM) high and
+# pin 7 (FORCE_12V) low the chip's 26 kHz PWM reaches the fan's PWM pin and
 # its tach is readable (in the vendor's both-high state the tach reads
 # 0xfff8, which made the vendor RPM table spin-up every 15 s).  The chip's
 # own RPM algorithm did not converge on this fan, so the loop is here: each
@@ -40,8 +40,8 @@ G() { i2cget -y $BUS $ADDR "$1" 2>/dev/null; }
 b2=""; for c in /sys/class/gpio/gpiochip*; do [ "$(cat $c/label 2>/dev/null)" = "9-001c" ] && b2=${c#*gpiochip}; done
 if [ -n "$b2" ]; then
 	for p in 6 7; do g=$(( b2 + p )); [ -d /sys/class/gpio/gpio$g ] || echo $g > /sys/class/gpio/export; echo out > /sys/class/gpio/gpio$g/direction; done
-	echo 0 > /sys/class/gpio/gpio$(( b2 + 6 ))/value	# FORCE_PWM low
-	echo 1 > /sys/class/gpio/gpio$(( b2 + 7 ))/value	# FORCE_12V high
+	echo 1 > /sys/class/gpio/gpio$(( b2 + 6 ))/value	# FORCE_PWM high
+	echo 0 > /sys/class/gpio/gpio$(( b2 + 7 ))/value	# FORCE_12V low
 fi
 E 0x50 0x00	# lookup table off
 E 0x2b 0x0c	# PWM base 26 kHz
