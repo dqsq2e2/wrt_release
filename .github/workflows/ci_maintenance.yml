@@ -52,9 +52,28 @@ jobs:
         run: |
           set -euo pipefail
           cutoff=$(date -u -d '3 days ago' +%s)
+          deleted_count=0
+
+          # High-frequency workflows (Upstream Watch: every 6h + push triggers,
+          # often cancelled+rerun) accumulate dozens of runs inside any time
+          # window. Keep only the newest N completed runs for them.
+          keep_latest=10
+          for wf in $(gh api "repos/$GITHUB_REPOSITORY/actions/workflows" --jq '.workflows[] | select(.name == "Upstream Watch") | .id'); do
+            gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/runs?per_page=100" \
+              --jq '.workflow_runs[] | select(.status == "completed") | [.id, .created_at] | @tsv' | \
+            sort -t "$(printf '\t')" -k2 -r | tail -n +$((keep_latest + 1)) | \
+            while IFS=$'\t' read -r run_id _; do
+              [ -z "$run_id" ] && continue
+              echo "Deleting old Upstream Watch run: $run_id"
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" \
+                && deleted_count=$((deleted_count + 1)) \
+                || echo "WARN: delete failed for run $run_id"
+            done
+          done
+
+          # Everything else: delete completed runs older than the cutoff.
           run_list=$(mktemp)
           trap 'rm -f "$run_list"' EXIT
-          deleted_count=0
 
           gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" \
             --jq '.workflow_runs[] | select(.status == "completed") | [.id, .created_at] | @tsv' > "$run_list"
@@ -63,12 +82,13 @@ jobs:
             run_time=$(date -u -d "$created_at" +%s)
             if (( run_time < cutoff )); then
               echo "Deleting workflow run: $run_id"
-              gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id"
-              deleted_count=$((deleted_count + 1))
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" \
+                && deleted_count=$((deleted_count + 1)) \
+                || echo "WARN: delete failed for run $run_id"
             fi
           done < "$run_list"
 
-          echo "Deleted $deleted_count completed workflow runs older than 3 days."
+          echo "Deleted $deleted_count workflow runs."
           echo "- Deleted workflow runs: $deleted_count" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep Recent Monitored Releases
