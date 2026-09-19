@@ -115,12 +115,18 @@ while :; do
 	else target=$(( min_rpm + (max_rpm - min_rpm) * (temp - tmin) / (tmax - tmin) )); fi
 	rpm=$(read_rpm)
 	if [ $notach -eq 1 ]; then rpm=-1; fi	# never "stalls", never adjusts on tach
-	# optional fan-off-at-idle band (needs a tach: the loop below keeps it honest)
+	# optional fan-off-at-idle band: in PWM passthrough duty=0 only parks the
+	# fan at its internal floor (~2.4k RPM), so a real stop goes through the
+	# board chopper instead (FORCE_PWM low + FORCE_12V high + duty 0 = fan
+	# power cut).  Waking flips back to passthrough first: the fan repowers
+	# at its floor with no full-speed blip either way.
 	if [ "$off_below" -gt 0 ] && [ "$on_above" -gt "$off_below" ]; then
 		if [ $fan_off -eq 0 ] && [ "$temp" -le "$off_below" ]; then
-			fan_off=1; E 0x40 0; logger -t velo5x0-fand "temp ${temp}C <= ${off_below}: fan off"
+			[ -n "$b2" ] && { echo 0 > /sys/class/gpio/gpio$(( b2 + 6 ))/value; echo 1 > /sys/class/gpio/gpio$(( b2 + 7 ))/value; }
+			fan_off=1; E 0x40 0; logger -t velo5x0-fand "temp ${temp}C <= ${off_below}: fan off (chopper cut)"
 		elif [ $fan_off -eq 1 ] && [ "$temp" -ge "$on_above" ]; then
-			fan_off=0; E 0x40 0x30; sleep 2; duty=14; E 0x40 $duty; zeros=0; logger -t velo5x0-fand "temp ${temp}C >= ${on_above}: fan on"
+			[ -n "$b2" ] && { echo 1 > /sys/class/gpio/gpio$(( b2 + 6 ))/value; echo 0 > /sys/class/gpio/gpio$(( b2 + 7 ))/value; }
+			fan_off=0; sleep 1; duty=$min_duty; E 0x40 $duty; zeros=0; logger -t velo5x0-fand "temp ${temp}C >= ${on_above}: fan on (passthrough)"
 		fi
 		if [ $fan_off -eq 1 ]; then echo 0 > /tmp/velo5x0-fan.duty; sleep "$period"; continue; fi
 	fi
