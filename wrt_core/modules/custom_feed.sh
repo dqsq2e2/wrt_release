@@ -337,7 +337,7 @@ install_custom_feed() {
         open-app-filter luci-app-oaf lucky luci-app-lucky luci-app-easytier
         luci-app-emmc-health luci-app-wolultra luci-app-mini-diskmanager
         axonhub luci-app-axonhub gecoosac luci-app-gecoosac sing-box
-        tingreader luci-app-tingreader
+        tingreader luci-app-tingreader luci-app-velo5x0-fan
     )
     local custom_feed_sources=()
     local missing_feed_dirs=()
@@ -467,6 +467,13 @@ install_custom_feed() {
     if ! sync_tingreader_packages_to_feed_dir \
         "https://github.com/dqsq2e2/luci-app-tingreader.git" "main" \
         "$custom_feed_dir" "dqsq2e2/luci-app-tingreader"; then
+        rm -rf "$custom_feed_dir"
+        return 1
+    fi
+
+    if ! sync_repo_root_package_to_feed_dir \
+        "https://github.com/dqsq2e2/luci-app-velo5x0-fan.git" "main" \
+        "$custom_feed_dir" "dqsq2e2/luci-app-velo5x0-fan" "luci-app-velo5x0-fan"; then
         rm -rf "$custom_feed_dir"
         return 1
     fi

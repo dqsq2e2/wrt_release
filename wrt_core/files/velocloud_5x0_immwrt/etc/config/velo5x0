@@ -3,22 +3,7 @@
 #   list reserve '4K$0x21bb4a000'
 config memmap
 
-# fan: closed-loop RPM targets, see /usr/sbin/velo5x0-fand.
-# One config fits 2-wire, 3-wire and 4-wire fans (520V 完美固件):
-#  - 4-wire: closed loop down to min_rpm (quiet)
-#  - 3-wire: startup floor calibration lifts min_rpm to the fan's real floor
-#  - 2-wire: open-loop duty curve min_duty..255 over t_min..t_max
-# Curve: <=42°C stop, 45°C start spinning, 45→60°C ramp, >=60°C full speed.
-config fan
-	option min_rpm '1200'
-	option max_rpm '6000'
-	option t_min '45'
-	option t_max '60'
-	option off_below '42'
-	option on_above '45'
-	option tach 'auto'
-	option min_duty '45'
-	option temp_src 'cpu'
+# The fan section is initialized and managed by luci-app-velo5x0-fan.
 
 # dsa: 0 = two dumb switches (eth0/eth1), 3 = DSA for both (lan1..lan8); see velo5x0-dsa
 # 520V 完美固件: DSA per-port by default — each jack is its own netdev.
