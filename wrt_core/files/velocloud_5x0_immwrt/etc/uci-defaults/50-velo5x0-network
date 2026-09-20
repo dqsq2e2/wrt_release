@@ -68,20 +68,4 @@ set system.led_logo_red.default='0'
 UCI
 	uci commit system
 fi
-# DSA slaves inherit the master (CPU port) MAC by design; give each lan port
-# and the bridge its own locally-administered MAC derived from eth0's factory
-# address (U/L bit set, last octet = port number; unique per box).
-if ! uci -q get network.lan1_dev >/dev/null && [ -s /sys/class/net/eth0/address ]; then
-	mac=$(cat /sys/class/net/eth0/address)
-	prefix="${mac%:*}"
-	first=$(printf '%02x' $(( 0x${prefix%%:*} | 0x02 )))
-	np="$first:${prefix#*:}"
-	for i in 1 2 3 4 5 6 7 8; do
-		uci set network.lan${i}_dev='device'
-		uci set network.lan${i}_dev.name="lan$i"
-		uci set network.lan${i}_dev.macaddr="$(printf '%s:%02x' "$np" "$i")"
-	done
-	uci set network.@device[0].macaddr="$(printf '%s:%02x' "$np" 0)"
-	uci commit network
-fi
 exit 0
