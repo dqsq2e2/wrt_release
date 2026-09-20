@@ -1,13 +1,17 @@
 #!/bin/sh
 # Default-enable fw4 software flow offloading (kernel flowtable fast path):
-# established NAT flows skip per-packet rule walks, which is worth real CPU
-# on the Atom C2558 at high pps. x86/igb has no flowtable hardware offload
-# driver, so only the software path is seeded here. Compatible with
-# fullconenat-sonic: established flows take the flowtable while new inbound
-# fullcone mappings still reach the software lookup.
+# established NAT flows skip per-packet rule walks, worth real CPU on the
+# Atom C2558 at high pps. Also strip the hardware flag: upstream's
+# 002-default-enable-fullcone.patch plants flow_offloading_hw=1 in the
+# default firewall config, but x86/igb has no flowtable hardware offload
+# driver (tc-flower/flow offload is mlx5/nfp territory), so the flag can
+# never install an entry here and only confuses the LuCI display.
+# Software offload coexists with fullconenat-sonic: established flows take
+# the flowtable while new inbound fullcone mappings reach the software lookup.
 grep -qi velocloud /sys/class/dmi/id/sys_vendor 2>/dev/null || exit 0
 uci -q batch <<'UCI'
 set firewall.@defaults[0].flow_offloading='1'
+delete firewall.@defaults[0].flow_offloading_hw
 commit firewall
 UCI
 exit 0
