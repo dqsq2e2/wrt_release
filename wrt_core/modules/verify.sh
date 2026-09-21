@@ -54,6 +54,22 @@ verify_native_apk_repository_support() {
 }
 
 
+verify_procd_cgroup_lifecycle_patch() {
+    local procd_patch="$BUILD_DIR/package/system/procd/patches/999-cgroup-lifecycle.patch"
+
+    if [ ! -f "$procd_patch" ]; then
+        echo "错误：缺少 procd cgroup 生命周期补丁。" >&2
+        return 1
+    fi
+
+    if ! grep -Fq 'instance_remove_cgroup(in->srv->name, in->name);' "$procd_patch" ||
+       ! grep -Fq -- '-	instance_remove_cgroup(in->srv->name, in->name);' "$procd_patch"; then
+        echo "错误：procd cgroup 生命周期补丁内容不完整。" >&2
+        return 1
+    fi
+}
+
+
 verify_custom_feed_installed_paths() {
     local custom_feed_name
     local custom_feed_package_dir

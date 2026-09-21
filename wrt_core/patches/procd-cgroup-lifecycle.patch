@@ -1,0 +1,65 @@
+From 16a5f34c57504aae0caeca7c18c285df46e71b0c Mon Sep 17 00:00:00 2001
+From: Au Ychen <au-ychen@foxmail.com>
+Date: Thu, 17 Sep 2026 19:55:53 +0800
+Subject: [PATCH] service: only remove instance cgroups when deleting instances
+
+instance_free() is also used to release temporary configuration objects
+created while updating a live service instance. Removing the live
+instance cgroup from that path kills the process being updated, causing
+successful task wrappers to report SIGKILL (137).
+
+Remove the cgroup only when the instance is actually deleted.
+
+Signed-off-by: Au Ychen <au-ychen@foxmail.com>
+---
+ service/instance.c | 15 +++------------
+ 1 file changed, 3 insertions(+), 12 deletions(-)
+
+diff --git a/service/instance.c b/service/instance.c
+index 61fbfaa..655d59c 100644
+--- a/service/instance.c
++++ b/service/instance.c
+@@ -664,23 +664,13 @@ instance_remove_cgroup(const char *service, const char *instance)
+ {
+ 	char cgnamebuf[256];
+ 	char *sep;
+-	int fd, ret;
++	int ret;
+ 
+-	ret = snprintf(cgnamebuf, sizeof(cgnamebuf), "%s/%s/%s/cgroup.kill",
++	ret = snprintf(cgnamebuf, sizeof(cgnamebuf), "%s/%s/%s",
+ 		       CGROUP_BASEDIR, service, instance);
+ 	if (ret >= (int)sizeof(cgnamebuf))
+ 		return;
+ 
+-	fd = open(cgnamebuf, O_WRONLY);
+-	if (fd >= 0) {
+-		if (write(fd, "1", 1) < 0)
+-			ret = -1;
+-		close(fd);
+-	}
+-
+-	sep = strrchr(cgnamebuf, '/');
+-	if (sep)
+-		*sep = '\0';
+ 	(void)rmdir(cgnamebuf);
+ 
+ 	sep = strrchr(cgnamebuf, '/');
+@@ -912,6 +902,7 @@ instance_delete(struct service_instance *in)
+ 	struct service *s = in->srv;
+ 
+ 	avl_delete(&s->instances.avl, &in->node.avl);
++	instance_remove_cgroup(in->srv->name, in->name);
+ 	instance_free(in);
+ 	service_stopped(s);
+ }
+@@ -1797,7 +1788,6 @@ instance_free(struct service_instance *in)
+ 	uloop_timeout_cancel(&in->watchdog.timeout);
+ 	trigger_del(in);
+ 	watch_del(in);
+-	instance_remove_cgroup(in->srv->name, in->name);
+ 	instance_config_cleanup(in);
+ 	free(in->config);
+ 	free(in->data_blob);
+-- 
+2.46.0

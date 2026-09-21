@@ -118,6 +118,15 @@ fix_default_set() {
         \cp -f "$BASE_PATH/patches/rpcd-session-values-token.patch" \
             "$BUILD_DIR/package/system/rpcd/patches/999-session-values-token.patch"
     fi
+
+    # procd: do not kill a live instance when freeing a temporary update object.
+    local procd_dir="$BUILD_DIR/package/system/procd"
+    local procd_patch="$BASE_PATH/patches/procd-cgroup-lifecycle.patch"
+    if [ -d "$procd_dir" ] && [ -f "$procd_patch" ]; then
+        mkdir -p "$procd_dir/patches"
+        \cp -f "$procd_patch" "$procd_dir/patches/999-cgroup-lifecycle.patch"
+        echo "Installed procd cgroup lifecycle patch"
+    fi
 }
 
 # velocloud_5x0: applied in stage_post_install_package_fixes (after feeds are
