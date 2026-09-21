@@ -3,8 +3,6 @@
 #   list reserve '4K$0x21bb4a000'
 config memmap
 
-# The fan section is initialized and managed by luci-app-velo5x0-fan.
-
 # dsa: 0 = two dumb switches (eth0/eth1), 3 = DSA for both (lan1..lan8); see velo5x0-dsa
 # 520V 完美固件: DSA per-port by default — each jack is its own netdev.
 config dsa

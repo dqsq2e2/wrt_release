@@ -579,12 +579,6 @@ DOCKER_STACK_PATCHES_ENABLED="$DOCKER_STACK_PATCHES_ENABLED" \
 if [[ -d "$BASE_PATH/files/$Dev" ]]; then
     mkdir -p "$BASE_PATH/../$BUILD_DIR/files"
     cp -a "$BASE_PATH/files/$Dev/." "$BASE_PATH/../$BUILD_DIR/files/"
-    if [[ "$Dev" == "velocloud_5x0_immwrt" ]]; then
-        # These paths now belong to luci-app-velo5x0-fan. Drop stale generated
-        # overlays from reused build trees so they cannot shadow the feed.
-        rm -f "$BASE_PATH/../$BUILD_DIR/files/usr/sbin/velo5x0-fand" \
-              "$BASE_PATH/../$BUILD_DIR/files/etc/init.d/velo5x0-fan"
-    fi
     echo "已注入机型 files 覆盖层: files/$Dev"
 fi
 
