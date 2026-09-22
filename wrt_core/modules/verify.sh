@@ -54,7 +54,35 @@ verify_native_apk_repository_support() {
 }
 
 
+procd_cgroup_lifecycle_patch_required() {
+    local procd_makefile="$BUILD_DIR/package/system/procd/Makefile"
+    local source_date
+
+    if [ ! -f "$procd_makefile" ]; then
+        echo "警告：无法读取 procd Makefile，将保留补丁以避免漏修复。" >&2
+        return 0
+    fi
+
+    source_date=$(sed -n 's/^PKG_SOURCE_DATE:=//p' "$procd_makefile" | head -n 1)
+    if [ -z "$source_date" ]; then
+        echo "警告：无法读取 procd PKG_SOURCE_DATE，将保留补丁以避免漏修复。" >&2
+        return 0
+    fi
+
+    # f4d512d93 introduced the regression on 2026-08-21.
+    if [[ "$source_date" < "2026-08-21" ]]; then
+        return 1
+    fi
+
+    return 0
+}
+
+
 verify_procd_cgroup_lifecycle_patch() {
+    if ! procd_cgroup_lifecycle_patch_required; then
+        return 0
+    fi
+
     local procd_patch="$BUILD_DIR/package/system/procd/patches/999-cgroup-lifecycle.patch"
 
     if [ ! -f "$procd_patch" ]; then

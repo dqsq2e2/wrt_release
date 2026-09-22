@@ -208,11 +208,6 @@ update_dockerman() {
 
         _normalize_dockerman_apk_version "$path/Makefile" "luci-app-dockerman" || return 1
 
-        # Only the broken controller from upstream PR #210 needs this patch.
-        if [ "$(git hash-object "$path/luasrc/controller/dockerman.lua")" = "d77d273166d16a44dc7b2ab0c0518eb795599230" ]; then
-            (cd "$path" && patch --batch -p1 < "$BASE_PATH/patches/dockerman-events-syntax.patch") || return 1
-        fi
-
         if declare -F docker_stack_sync_dockerman_nftables_compat >/dev/null 2>&1; then
             docker_stack_sync_dockerman_nftables_compat "$BUILD_DIR" "0" || return 1
         fi

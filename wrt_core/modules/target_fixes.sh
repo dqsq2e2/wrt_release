@@ -123,9 +123,14 @@ fix_default_set() {
     local procd_dir="$BUILD_DIR/package/system/procd"
     local procd_patch="$BASE_PATH/patches/procd-cgroup-lifecycle.patch"
     if [ -d "$procd_dir" ] && [ -f "$procd_patch" ]; then
-        mkdir -p "$procd_dir/patches"
-        \cp -f "$procd_patch" "$procd_dir/patches/999-cgroup-lifecycle.patch"
-        echo "Installed procd cgroup lifecycle patch"
+        if procd_cgroup_lifecycle_patch_required; then
+            mkdir -p "$procd_dir/patches"
+            \cp -f "$procd_patch" "$procd_dir/patches/999-cgroup-lifecycle.patch"
+            echo "Installed procd cgroup lifecycle patch"
+        else
+            \rm -f "$procd_dir/patches/999-cgroup-lifecycle.patch"
+            echo "Skipping procd cgroup lifecycle patch: source predates the regression"
+        fi
     fi
 }
 
