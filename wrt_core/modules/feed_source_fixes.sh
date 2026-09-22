@@ -71,6 +71,41 @@ update_homeproxy() {
 }
 
 
+fetch_lucky_release_index() {
+    local directory_url="$1"
+    local output_file="$2"
+    local cache_key
+    cache_key="$(date +%s%N)-${RANDOM}"
+
+    # The CDN has served cached HTML for requests that ask for JSON even though
+    # the response varies on Accept. Use a unique directory query to reach the
+    # JSON representation instead of a previously cached browser page.
+    if ! curl_retry -fsSL \
+        -H "Accept: application/json" \
+        -H "Cache-Control: no-cache" \
+        -o "$output_file" \
+        "${directory_url}?sort=namedirfirst&order=asc&_=${cache_key}"; then
+        return 1
+    fi
+
+    python3 - "$output_file" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as stream:
+        payload = json.load(stream)
+except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    print(f"Lucky 目录服务未返回有效 JSON: {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+if not isinstance(payload, list):
+    print("Lucky 目录服务返回了非数组 JSON。", file=sys.stderr)
+    raise SystemExit(1)
+PY
+}
+
+
 resolve_latest_lucky_release() {
     local release_base_url="https://release.66666.host"
     local root_index
@@ -80,7 +115,7 @@ resolve_latest_lucky_release() {
     version_index=$(mktemp)
     lucky_index=$(mktemp)
 
-    if ! curl_retry -fsSL -H "Accept: application/json" -o "$root_index" "$release_base_url/"; then
+    if ! fetch_lucky_release_index "$release_base_url/" "$root_index"; then
         echo "错误：无法获取 Lucky 发布目录。" >&2
         rm -f "$root_index" "$version_index" "$lucky_index"
         return 1
@@ -111,7 +146,7 @@ PY
         return 1
     }
 
-    if ! curl_retry -fsSL -H "Accept: application/json" -o "$version_index" "$release_base_url/$release_dir/"; then
+    if ! fetch_lucky_release_index "$release_base_url/$release_dir/" "$version_index"; then
         echo "错误：无法获取 Lucky 版本目录 $release_dir。" >&2
         rm -f "$root_index" "$version_index" "$lucky_index"
         return 1
@@ -143,7 +178,7 @@ PY
     }
 
     local lucky_version="${lucky_release_dir%_lucky}"
-    if ! curl_retry -fsSL -H "Accept: application/json" -o "$lucky_index" "$release_base_url/$release_dir/$lucky_release_dir/"; then
+    if ! fetch_lucky_release_index "$release_base_url/$release_dir/$lucky_release_dir/" "$lucky_index"; then
         echo "错误：无法获取 Lucky 文件目录 $release_dir/$lucky_release_dir。" >&2
         rm -f "$root_index" "$version_index" "$lucky_index"
         return 1
