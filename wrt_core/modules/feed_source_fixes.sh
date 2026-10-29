@@ -427,9 +427,25 @@ fix_quickstart() {
 
 
 update_oaf_deconfig() {
+    local init_path="$(get_custom_feed_worktree_dir)/open-app-filter/files/appfilter.init"
     local conf_path="$(get_custom_feed_worktree_dir)/open-app-filter/files/appfilter.config"
     local uci_def="$(get_custom_feed_worktree_dir)/luci-app-oaf/root/etc/uci-defaults/94_feature_3.0"
     local disable_path="$(get_custom_feed_worktree_dir)/luci-app-oaf/root/etc/uci-defaults/99_disable_oaf"
+
+    if [ -f "$init_path" ] && grep -q '^[[:space:]]*ensure_default_configs$' "$init_path"; then
+        sed -i \
+            -e '/config appfilter appfilter/,/config macfilter macfilter/ s/option enable 1/option enable 0/' \
+            -e '/config macfilter macfilter/,/config record / s/option enable 1/option enable 0/' \
+            -e "/config record 'record'/,/config network network/ s/option enable '1'/option enable '0'/" \
+            "$init_path"
+
+        if ! grep -Fq 'uci -q get fwx.appfilter.enable' "$init_path"; then
+            sed -i '/^[[:space:]]*ensure_default_configs$/a\
+\tif [ "$(uci -q get fwx.appfilter.enable)" != "1" ] && [ "$(uci -q get fwx.macfilter.enable)" != "1" ] && [ "$(uci -q get fwx.record.enable)" != "1" ]; then\
+\t\treturn 0\
+\tfi' "$init_path"
+        fi
+    fi
 
     if [ -d "${conf_path%/*}" ] && [ -f "$conf_path" ]; then
         sed -i \

@@ -125,6 +125,29 @@ sync_repo_root_package_to_feed_dir() {
 }
 
 
+remove_nested_airoha_npu_package() {
+    local package_dir="$1"
+    local nested_package_dir="$package_dir/luci-app-airoha-npu"
+
+    if [ -f "$package_dir/Makefile" ] && [ -f "$nested_package_dir/Makefile" ]; then
+        rm -rf "$nested_package_dir" || return 1
+        echo "已移除 luci-app-airoha-npu 的重复嵌套包目录：$nested_package_dir"
+    fi
+}
+
+
+fix_airoha_npu_luci_mk() {
+    local package_dir="$1"
+    local makefile_path
+
+    while IFS= read -r -d '' makefile_path; do
+        if grep -qE '^[[:space:]]*include[[:space:]]+\.\./\.\./luci\.mk[[:space:]]*$' "$makefile_path"; then
+            sed -i 's|^[[:space:]]*include[[:space:]]\+\.\./\.\./luci\.mk[[:space:]]*$|include $(TOPDIR)/feeds/luci/luci.mk|' "$makefile_path" || return 1
+        fi
+    done < <(find "$package_dir" -type f -name Makefile -print0)
+}
+
+
 sync_tingreader_packages_to_feed_dir() {
     local repo_url="$1"
     local repo_branch="$2"
@@ -498,7 +521,7 @@ install_custom_feed() {
 
     local base_custom_feed_packages=(
         xray-core xray-plugin dns2tcp dns2socks haproxy hysteria \
-        naiveproxy shadowsocks-rust sing-box v2ray-core v2ray-geodata geoview v2ray-plugin geo2txt \
+        naiveproxy shadowsocks-rust sing-box v2ray-core v2ray-geodata geoview v2ray-plugin \
         tuic-client chinadns-ng ipt2socks tcping trojan-plus simple-obfs shadowsocksr-libev \
         v2dat adguardhome luci-app-adguardhome ddns-go \
         luci-app-ddns-go quickstart \
@@ -514,7 +537,7 @@ install_custom_feed() {
         luci-app-passwall nikki luci-app-nikki mihomo-meta
         open-app-filter luci-app-oaf lucky luci-app-lucky luci-app-easytier
         luci-app-upnp miniupnpd
-        luci-app-emmc-health luci-app-wolultra luci-app-mini-diskmanager
+        luci-app-emmc-health luci-app-airoha-npu luci-app-wolultra luci-app-mini-diskmanager
         axonhub luci-app-axonhub gecoosac luci-app-gecoosac sing-box
         luci-app-tingreader luci-app-velo5x0-fan
     )
@@ -548,7 +571,7 @@ install_custom_feed() {
         "kenzok8/small-package|https://github.com/kenzok8/small-package.git||${base_custom_feed_packages[*]}"
         "linkease/istore|https://github.com/linkease/istore.git|main|luci/taskd luci/luci-lib-xterm luci/luci-lib-taskd luci/luci-app-store"
         "4IceG/luci-app-mini-diskmanager|https://github.com/4IceG/luci-app-mini-diskmanager.git|main|luci-app-mini-diskmanager"
-        "sbwml/luci-app-mosdns|https://github.com/sbwml/luci-app-mosdns.git|v5|mosdns luci-app-mosdns"
+        "sbwml/luci-app-mosdns|https://github.com/sbwml/luci-app-mosdns.git|v5|mosdns luci-app-mosdns geo2txt"
         "Openwrt-Passwall/openwrt-passwall|https://github.com/Openwrt-Passwall/openwrt-passwall.git|main|luci-app-passwall"
         "nikkinikki-org/OpenWrt-nikki|https://github.com/nikkinikki-org/OpenWrt-nikki.git|main|nikki luci-app-nikki mihomo-meta"
     )
@@ -665,6 +688,19 @@ install_custom_feed() {
     fi
 
     if ! fix_emmc_health_luci_js_deps "$custom_feed_dir/luci-app-emmc-health"; then
+        rm -rf "$custom_feed_dir"
+        return 1
+    fi
+
+    if ! sync_repo_root_package_to_feed_dir \
+        "https://github.com/rchen14b/luci-app-airoha-npu.git" "main" \
+        "$custom_feed_dir" "rchen14b/luci-app-airoha-npu" "luci-app-airoha-npu"; then
+        rm -rf "$custom_feed_dir"
+        return 1
+    fi
+
+    if ! remove_nested_airoha_npu_package "$custom_feed_dir/luci-app-airoha-npu" || \
+       ! fix_airoha_npu_luci_mk "$custom_feed_dir/luci-app-airoha-npu"; then
         rm -rf "$custom_feed_dir"
         return 1
     fi

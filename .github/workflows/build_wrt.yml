@@ -33,6 +33,7 @@ on:
           - zn_m2_immwrt
           - zn_m2_libwrt
           - x64_immwrt
+          - nokia_040g_immwrt
           - velocloud_5x0_immwrt
       add_fragments:
         required: false

@@ -61,6 +61,7 @@ verify_custom_feed_installed_paths() {
     local required_package_dirs=(
         luci-app-adguardhome luci-app-mosdns v2ray-geodata luci-app-easytier
         luci-app-passwall nikki luci-app-nikki mihomo-meta luci-app-emmc-health
+        luci-app-airoha-npu geo2txt
         luci-app-wolultra luci-app-mini-diskmanager luci-app-homeproxy sing-box
         axonhub luci-app-axonhub gecoosac luci-app-gecoosac
         luci-app-tingreader luci-app-upnp miniupnpd

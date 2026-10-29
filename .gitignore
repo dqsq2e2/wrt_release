@@ -12,6 +12,7 @@ immortalwrt/
 immortalwrt-daed/
 immortalwrt-honk/
 airoha-wrt/
+ponwrt/
 compilecfg/test.ini
 deconfig/test.config
 *.swp

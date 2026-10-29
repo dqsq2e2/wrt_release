@@ -126,6 +126,7 @@ GitHub Actions 的手动构建也提供 `add_fragments` 与 `remove_fragments` �
 | 兆能 | M2 | `zn_m2_immwrt` |
 | 兆能 | M2 - LiBwrt | `zn_m2_libwrt` |
 | Gemtek | W1701K | `gemtek_w1701k_immwrt` |
+| Nokia | XG-040G-MD（Airoha AN7581） | `nokia_040g_immwrt` |
 | x86 | X64 | `x64_immwrt` |
 
 示例：
