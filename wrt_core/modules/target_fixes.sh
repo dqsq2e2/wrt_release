@@ -231,20 +231,6 @@ apply_custom_feed_patches() {
 }
 
 
-fix_miniupnpd() {
-    local miniupnpd_dir="$BUILD_DIR/package/network/services/miniupnpd"
-    local patch_file="999-chanage-default-leaseduration.patch"
-
-    if [ ! -f "$miniupnpd_dir/Makefile" ]; then
-        miniupnpd_dir="$BUILD_DIR/feeds/packages/net/miniupnpd"
-    fi
-
-    if [ -d "$miniupnpd_dir" ] && [ -f "$BASE_PATH/patches/$patch_file" ]; then
-        install -Dm644 "$BASE_PATH/patches/$patch_file" "$miniupnpd_dir/patches/$patch_file"
-    fi
-}
-
-
 change_dnsmasq2full() {
     if ! grep -q "dnsmasq-full" $BUILD_DIR/include/target.mk; then
         sed -i 's/dnsmasq/dnsmasq-full/g' ./include/target.mk

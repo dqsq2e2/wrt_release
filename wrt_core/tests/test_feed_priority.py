@@ -123,33 +123,16 @@ class FeedPriorityTests(unittest.TestCase):
             )
 
     def test_core_miniupnpd_is_preserved(self):
-        core = self.package("package/network/services/miniupnpd")
+        self.package("package/network/services/miniupnpd")
         self.install()
         self.assertFalse((self.root / "package/feeds/packages/miniupnpd").exists())
         self.check_plugin_paths()
-        self.check_miniupnpd_patch(core)
 
     def test_feed_miniupnpd_is_used_without_core_copy(self):
         self.install()
         link = self.root / "package/feeds/packages/miniupnpd"
         self.assertEqual(link.resolve(), self.root / "feeds/packages/net/miniupnpd")
         self.check_plugin_paths()
-        self.check_miniupnpd_patch(link.resolve())
-
-    def check_miniupnpd_patch(self, selected):
-        self.shell(
-            'source <(sed "s/\\r$//" "$1/modules/target_fixes.sh")\n'
-            'BASE_PATH=$1\nBUILD_DIR=$PWD\nfix_miniupnpd\n'
-        )
-        name = "999-chanage-default-leaseduration.patch"
-        self.assertEqual(
-            (selected / "patches" / name).read_bytes(),
-            (BASE_PATH / "patches" / name).read_bytes(),
-        )
-        if selected == self.root / "package/network/services/miniupnpd":
-            self.assertFalse(
-                (self.root / "feeds/packages/net/miniupnpd/patches" / name).exists()
-            )
 
 
 if __name__ == "__main__":
