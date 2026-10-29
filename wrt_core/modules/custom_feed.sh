@@ -84,63 +84,6 @@ sync_sparse_packages_to_feed_dir() {
 }
 
 
-sync_all_top_level_packages_to_feed_dir() {
-    local repo_url="$1"
-    local repo_branch="$2"
-    local target_dir="$3"
-    local repo_label="$4"
-    local tmp_root
-    local repo_dir
-    local package_dir
-    local package_name
-    local package_count=0
-    local clone_args=(clone --depth 1 --filter=blob:none)
-
-    tmp_root=$(mktemp -d)
-    repo_dir="$tmp_root/repo"
-
-    if [ -n "$repo_branch" ]; then
-        clone_args+=(-b "$repo_branch")
-    fi
-
-    clone_args+=("$repo_url" "$repo_dir")
-
-    echo "正在从 $repo_label 同步全部顶层软件包..."
-    if ! git_retry "${clone_args[@]}"; then
-        echo "错误：从 $repo_url 克隆 $repo_label 失败" >&2
-        rm -rf "$tmp_root"
-        return 1
-    fi
-
-    for package_dir in "$repo_dir"/*; do
-        if [ ! -d "$package_dir" ] || [ ! -f "$package_dir/Makefile" ]; then
-            continue
-        fi
-
-        package_name=$(basename "$package_dir")
-        rm -rf "$target_dir/$package_name"
-        if ! mv "$package_dir" "$target_dir/"; then
-            echo "错误：无法同步 $repo_label/$package_name" >&2
-            rm -rf "$tmp_root"
-            return 1
-        fi
-        package_count=$((package_count + 1))
-    done
-
-    if ! rm -rf "$tmp_root" 2>/dev/null; then
-        sleep 1
-        rm -rf "$tmp_root" || return 1
-    fi
-
-    if [ "$package_count" -eq 0 ]; then
-        echo "错误：$repo_label 未发现顶层 OpenWrt 软件包目录" >&2
-        return 1
-    fi
-
-    echo "$repo_label 已同步 $package_count 个软件包目录。"
-}
-
-
 sync_repo_root_package_to_feed_dir() {
     local repo_url="$1"
     local repo_branch="$2"
@@ -570,6 +513,7 @@ install_custom_feed() {
         luci-app-quickstart luci-app-homeproxy luci-app-mosdns geo2txt
         luci-app-passwall nikki luci-app-nikki mihomo-meta
         open-app-filter luci-app-oaf lucky luci-app-lucky luci-app-easytier
+        luci-app-upnp miniupnpd
         luci-app-emmc-health luci-app-wolultra luci-app-mini-diskmanager
         axonhub luci-app-axonhub gecoosac luci-app-gecoosac sing-box
         luci-app-tingreader luci-app-velo5x0-fan
@@ -636,10 +580,11 @@ install_custom_feed() {
     fi
     mkdir -p "$custom_feed_dir"
 
-    # 先导入 VIKINGYFY 整仓；下面的精选来源会覆盖同名包，避免改变现有稳定依赖链。
-    if ! sync_all_top_level_packages_to_feed_dir \
+    # UPnP 前后端来自同一仓库：LuCI 前端和 miniupnpd 后端必须保持版本配套。
+    if ! sync_sparse_packages_to_feed_dir \
         "https://github.com/VIKINGYFY/packages.git" "main" \
-        "$custom_feed_dir" "VIKINGYFY/packages"; then
+        "$custom_feed_dir" "VIKINGYFY/packages (UPnP)" \
+        luci-app-upnp miniupnpd; then
         rm -rf "$custom_feed_dir"
         return 1
     fi
