@@ -580,11 +580,12 @@ install_custom_feed() {
     fi
     mkdir -p "$custom_feed_dir"
 
-    # UPnP 前后端来自同一仓库：LuCI 前端和 miniupnpd 后端必须保持版本配套。
+    # 只同步配置仍在使用的 VIKINGYFY 包；UPnP 前端和 miniupnpd 后端保持版本配套。
     if ! sync_sparse_packages_to_feed_dir \
         "https://github.com/VIKINGYFY/packages.git" "main" \
-        "$custom_feed_dir" "VIKINGYFY/packages (UPnP)" \
-        luci-app-upnp miniupnpd; then
+        "$custom_feed_dir" "VIKINGYFY/packages (selected)" \
+        axonhub luci-app-axonhub gecoosac luci-app-gecoosac \
+        luci-app-wolultra luci-app-upnp miniupnpd; then
         rm -rf "$custom_feed_dir"
         return 1
     fi
