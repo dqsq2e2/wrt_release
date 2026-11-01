@@ -42,6 +42,24 @@ curl_retry() {
     fi
 }
 
+mkdir -p "$test_dir/immutable"
+cat > "$test_dir/immutable/Makefile" <<'EOF'
+CORE_COMMIT:=eac5e0c5fba5078a7ff4517a3e3851e7fa0f4f8e
+HONK_SOURCE_TAG?=source-123456789
+HONK_SOURCE_URL?=https://github.com/kenzok8/openwrt-honk/releases/download/$(HONK_SOURCE_TAG)
+HONK_ASSET_X86_64?=honk-core-$(CORE_COMMIT)-x86_64.tar.gz
+HONK_ASSET_AARCH64?=honk-core-$(CORE_COMMIT)-aarch64.tar.gz
+HONK_ASSET_ARMV7?=honk-core-$(CORE_COMMIT)-armv7.tar.gz
+HONK_HASH_X86_64?=0000000000000000000000000000000000000000000000000000000000000001
+HONK_HASH_AARCH64?=0000000000000000000000000000000000000000000000000000000000000002
+HONK_HASH_ARMV7?=0000000000000000000000000000000000000000000000000000000000000003
+EOF
+prepare_honk_release "$test_dir/immutable" > "$test_dir/output" 2> "$test_dir/error"
+grep -q 'skipping legacy staging metadata' "$test_dir/output"
+[[ ! -e "$test_dir/immutable/generated-stage.mk" ]]
+[[ ! -e "$test_dir/immutable/generated-provenance.json" ]]
+echo "PASS: immutable source releases do not request removed staging metadata"
+
 before=$(make --no-print-directory -C "$test_dir/package" print-source)
 [[ $before == *$'\tSKIP' ]]
 prepare_honk_release "$test_dir/package"

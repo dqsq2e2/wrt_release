@@ -443,12 +443,49 @@ PY
 }
 
 
+has_honk_immutable_release_metadata() {
+    python3 - "$1/Makefile" <<'PY'
+import pathlib
+import re
+import sys
+
+makefile = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+
+# Immutable source releases carry the exact tag and SHA256 values in the
+# package Makefile. Older staged snapshots still need generated-stage.mk.
+if re.search(r"^HONK_SOURCE_TAG\?=source-[A-Za-z0-9_.-]+$", makefile, re.MULTILINE) is None:
+    raise SystemExit(1)
+if re.search(
+    r"^HONK_SOURCE_URL\?=https://github\.com/kenzok8/openwrt-honk/releases/download/\$\(HONK_SOURCE_TAG\)$",
+    makefile,
+    re.MULTILINE,
+) is None:
+    raise SystemExit(1)
+
+for arch, suffix in (("X86_64", "x86_64"), ("AARCH64", "aarch64"), ("ARMV7", "armv7")):
+    if re.search(
+        rf"^HONK_ASSET_{arch}\?=honk-core-\$\(CORE_COMMIT\)-{suffix}\.tar\.gz$",
+        makefile,
+        re.MULTILINE,
+    ) is None:
+        raise SystemExit(1)
+    if re.search(rf"^HONK_HASH_{arch}\?=[0-9a-f]{{64}}$", makefile, re.MULTILINE) is None:
+        raise SystemExit(1)
+PY
+}
+
+
 prepare_honk_release() {
     local package_dir="$1"
     local release_url="https://github.com/kenzok8/openwrt-honk/releases/download/staging"
     local tmp_dir
     local filename
     local validation_status
+
+    if has_honk_immutable_release_metadata "$package_dir"; then
+        echo "Honk package uses immutable source release metadata; skipping legacy staging metadata."
+        return 0
+    fi
 
     tmp_dir=$(mktemp -d)
     # These generated build inputs are published as release assets, not in Git.
