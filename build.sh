@@ -513,16 +513,25 @@ verify_apk_config() {
 retry_failed_downloads_verbose() {
     local download_log=$1
     local package_target
+    local retry_log
     local failed_packages=()
 
     mapfile -t failed_packages < <(
         sed -nE 's/.*ERROR: ([^[:space:]]+) failed to build.*/\1/p' "$download_log" | sort -u
     )
 
+    retry_log=$(mktemp)
     for package_target in "${failed_packages[@]}"; do
         echo "Verbose download retry: $package_target"
-        make "$package_target/download" V=s || true
+        if make "$package_target/download" V=s 2>&1 | tee "$retry_log"; then
+            continue
+        fi
+        # 仅匹配已知 firewall4 打包哈希差异时修正，再次下载校验。
+        if adopt_local_git_tarball_hash "$package_target" "$retry_log"; then
+            make "$package_target/download" V=s || true
+        fi
     done
+    rm -f "$retry_log"
 }
 
 preflight_download_sources() {
@@ -634,6 +643,7 @@ if [[ -d $TARGET_DIR ]]; then
     find "$TARGET_DIR" -type f \( -name "*.bin" -o -name "*.manifest" -o -name "*efi.img.gz" -o -name "*combined.img.gz" -o -name "*.itb" -o -name "*.fip" -o -name "*.ubi" -o -name "*rootfs.tar.gz" \) -exec rm -f {} +
 fi
 
+source "$BASE_PATH/modules/download_fixes.sh"
 preflight_download_sources
 source "$BASE_PATH/modules/image_build.sh"
 enable_ci_rootfs_reclamation
