@@ -65,9 +65,13 @@ verify_custom_feed_installed_paths() {
         luci-app-wolultra luci-app-mini-diskmanager luci-app-homeproxy sing-box
         axonhub luci-app-axonhub gecoosac luci-app-gecoosac
         luci-app-tingreader luci-app-upnp miniupnpd
-        taskd luci-lib-xterm luci-lib-taskd luci-app-store
     )
     local missing_package_dirs=()
+
+    case "${LUCI_STACK:-none}" in
+        istore) required_package_dirs+=(quickstart luci-app-quickstart taskd luci-lib-xterm luci-lib-taskd luci-app-store) ;;
+        vantage) required_package_dirs+=(luci-theme-vantage luci-app-vantage luci-app-netwiz) ;;
+    esac
 
     if [[ ${DAED_PACKAGES_ENABLED:-0} == "1" ]]; then
         required_package_dirs+=(dae daed luci-app-daede vmlinux-btf)
@@ -107,6 +111,32 @@ verify_expected_kernel_version() {
     fi
 }
 
+verify_luci_stack_config() {
+    local config_path="$1"
+    local stack="$2"
+    local pkg
+    local packages=()
+
+    case "$stack" in
+        istore)
+            packages=(luci-theme-argon luci-app-store quickstart luci-app-quickstart taskd luci-lib-taskd
+                      luci-lib-xterm kmod-md-mod luci-app-mini-diskmanager)
+            ;;
+        vantage)
+            packages=(luci-theme-vantage luci-app-vantage luci-app-netwiz)
+            ;;
+    esac
+    if [[ $stack != none ]]; then
+        packages+=(luci-theme-aurora)
+    fi
+
+    for pkg in "${packages[@]}"; do
+        if ! grep -qxF "CONFIG_PACKAGE_$pkg=y" "$config_path"; then
+            echo "Error: make defconfig dropped $pkg from the $stack LuCI stack." >&2
+            return 1
+        fi
+    done
+}
 
 verify_daed_config() {
     local config_path="$1"

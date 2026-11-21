@@ -23,7 +23,22 @@ fi
 FEEDS_CONF="feeds.conf.default"
 GOLANG_REPO="https://github.com/sbwml/packages_lang_golang"
 GOLANG_BRANCH="27.x"
-THEME_SET="argon"
+LUCI_STACK=${LUCI_STACK:-none}
+case "$LUCI_STACK" in
+    none)
+        THEME_SET=bootstrap
+        ;;
+    istore)
+        THEME_SET=argon
+        ;;
+    vantage)
+        THEME_SET=vantage
+        ;;
+    *)
+        echo "Error: invalid LUCI_STACK: $LUCI_STACK" >&2
+        exit 1
+        ;;
+esac
 LAN_ADDR="192.168.1.1"
 DOCKER_STACK_PATCHES_ENABLED=${DOCKER_STACK_PATCHES_ENABLED:-0}
 DAED_PACKAGES_ENABLED=${DAED_PACKAGES_ENABLED:-0}
@@ -68,6 +83,7 @@ source "$SCRIPT_DIR/modules/feed_source_fixes.sh"
 source "$SCRIPT_DIR/modules/package_source_updates.sh"
 source "$SCRIPT_DIR/modules/target_fixes.sh"
 source "$SCRIPT_DIR/modules/luci_fixes.sh"
+source "$SCRIPT_DIR/modules/luci_stacks.sh"
 source "$SCRIPT_DIR/modules/service_fixes.sh"
 
 docker_stack_patches_enabled() {
@@ -125,7 +141,15 @@ stage_pre_install_source_fixes() {
     update_dnsmasq_conf
     add_backup_info_to_sysupgrade
     update_mosdns_deconfig
-    fix_quickstart
+    case "$LUCI_STACK" in
+        istore)
+            fix_quickstart
+            fix_quickstart_assets "$(get_custom_feed_worktree_dir)/luci-app-quickstart"
+            ;;
+        vantage)
+            prepare_vantage_stack
+            ;;
+    esac
     update_oaf_deconfig
     add_timecontrol
     add_quickfile

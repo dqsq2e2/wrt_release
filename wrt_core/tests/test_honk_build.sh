@@ -16,7 +16,7 @@ grep -Fq 'kenzok8/openwrt-honk|https://github.com/kenzok8/openwrt-honk.git|main|
 echo "PASS: Honk packages use the kenzok8 source"
 
 preview=$(cd "$REPO_ROOT" && bash <(sed 's/\r$//' build.sh) "$MODEL" config_preview)
-grep -q 'Effective fragments: honk$' <<< "$preview"
+grep -q 'Effective fragments: honk,istore$' <<< "$preview"
 grep -q 'Honk packages: enabled$' <<< "$preview"
 grep -q 'Daed packages: skipped$' <<< "$preview"
 grep -q 'Docker stack patches: skipped$' <<< "$preview"
@@ -64,7 +64,7 @@ sed 's/\r$//' "$BASE_PATH/deconfig/fragments/daed.config" > "$test_dir/daed-conf
 verify_daed_config "$test_dir/daed-config" 1
 preview=$(cd "$REPO_ROOT" && ADD_CONFIG_FRAGMENTS=daed REMOVE_CONFIG_FRAGMENTS=honk \
     bash <(sed 's/\r$//' build.sh) "$MODEL" config_preview)
-grep -q 'Effective fragments: daed$' <<< "$preview"
+grep -q 'Effective fragments: istore,daed$' <<< "$preview"
 grep -q 'Daed packages: enabled$' <<< "$preview"
 grep -q 'Honk packages: skipped$' <<< "$preview"
 echo "PASS: optional daed integration remains available"

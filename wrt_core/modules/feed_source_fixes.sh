@@ -19,11 +19,13 @@ remove_unwanted_packages() {
     local packages_utils=(
         "cups"
     )
-    if supports_ucode_luci_themes; then
-        luci_packages+=(
-            "luci-app-argon-config" "luci-theme-argon"
-            "luci-app-aurora-config" "luci-theme-aurora"
-        )
+    if supports_ucode_luci_themes && [[ ${LUCI_STACK:-none} != none ]]; then
+        luci_packages+=(luci-app-aurora-config luci-theme-aurora)
+        if [[ $LUCI_STACK == istore ]]; then
+            luci_packages+=(luci-app-argon-config luci-theme-argon)
+        else
+            luci_packages+=(luci-app-vantage luci-theme-vantage luci-app-netwiz)
+        fi
     fi
     if [[ ${DAED_PACKAGES_ENABLED:-0} == "1" ]]; then
         luci_packages+=("luci-app-daede")

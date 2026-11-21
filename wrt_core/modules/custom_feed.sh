@@ -561,16 +561,15 @@ install_custom_feed() {
         naiveproxy shadowsocks-rust sing-box v2ray-core v2ray-geodata geoview v2ray-plugin \
         tuic-client chinadns-ng ipt2socks tcping trojan-plus simple-obfs shadowsocksr-libev \
         v2dat adguardhome luci-app-adguardhome ddns-go \
-        luci-app-ddns-go quickstart \
-        luci-app-quickstart luci-app-istorex luci-app-cloudflarespeedtest netdata luci-app-netdata \
+        luci-app-ddns-go luci-app-cloudflarespeedtest netdata luci-app-netdata \
         lucky luci-app-lucky luci-app-openclash luci-app-homeproxy luci-app-amlogic \
         oaf open-app-filter luci-app-oaf easytier luci-app-easytier \
         msd_lite luci-app-msd_lite cups luci-app-cupsd
     )
     local required_feed_dirs=(
-        cups tcping v2ray-geodata taskd luci-lib-xterm luci-lib-taskd luci-app-store
+        cups tcping v2ray-geodata
         luci-app-openclash
-        luci-app-quickstart luci-app-homeproxy luci-app-mosdns geo2txt
+        luci-app-homeproxy luci-app-mosdns geo2txt
         luci-app-passwall nikki luci-app-nikki mihomo-meta
         open-app-filter luci-app-oaf lucky luci-app-lucky luci-app-easytier
         luci-app-upnp miniupnpd
@@ -596,23 +595,45 @@ install_custom_feed() {
     if [ ! -d "$fullconenat_dir" ] && [ ! -d "$fullconenat_sonic_dir" ]; then
         base_custom_feed_packages+=(fullconenat)
     fi
-    if supports_ucode_luci_themes; then
-        required_feed_dirs+=(
-            luci-theme-argon luci-app-argon-config
-            luci-theme-aurora luci-app-aurora-config
-        )
+    if supports_ucode_luci_themes && [[ ${LUCI_STACK:-none} != none ]]; then
+        required_feed_dirs+=(luci-theme-aurora luci-app-aurora-config)
+        if [[ $LUCI_STACK == istore ]]; then
+            required_feed_dirs+=(luci-theme-argon luci-app-argon-config)
+        fi
     fi
 
     # 统一从外部仓库同步指定包，避免分散维护 feeds.conf。
+    if [[ ${LUCI_STACK:-none} == istore ]]; then
+        base_custom_feed_packages+=(quickstart luci-app-quickstart luci-app-istorex)
+    fi
     custom_feed_sources=(
         "kenzok8/small-package|https://github.com/kenzok8/small-package.git||${base_custom_feed_packages[*]}"
-        "linkease/istore|https://github.com/linkease/istore.git|main|luci/taskd luci/luci-lib-xterm luci/luci-lib-taskd luci/luci-app-store"
         "4IceG/luci-app-mini-diskmanager|https://github.com/4IceG/luci-app-mini-diskmanager.git|main|luci-app-mini-diskmanager"
         "sbwml/luci-app-mosdns|https://github.com/sbwml/luci-app-mosdns.git|v5|mosdns luci-app-mosdns geo2txt"
         "Openwrt-Passwall/openwrt-passwall|https://github.com/Openwrt-Passwall/openwrt-passwall.git|main|luci-app-passwall"
         "nikkinikki-org/OpenWrt-nikki|https://github.com/nikkinikki-org/OpenWrt-nikki.git|main|nikki luci-app-nikki mihomo-meta"
         "dqsq2e2/luci-app-zTC1Control|https://github.com/dqsq2e2/luci-app-zTC1Control.git|main|luci-app-ztc1control"
     )
+
+    case "${LUCI_STACK:-none}" in
+        istore)
+            custom_feed_sources+=(
+                "linkease/istore|https://github.com/linkease/istore.git|main|luci/taskd luci/luci-lib-xterm luci/luci-lib-taskd luci/luci-app-store"
+            )
+            required_feed_dirs+=(quickstart luci-app-quickstart taskd luci-lib-xterm luci-lib-taskd luci-app-store)
+            ;;
+        vantage)
+            if ! supports_ucode_luci_themes; then
+                echo "错误：Vantage 需要支持 ucode 主题模板的 LuCI。" >&2
+                return 1
+            fi
+            custom_feed_sources+=(
+                "anothaDev/luci-theme-vantage|https://github.com/anothaDev/luci-theme-vantage.git||luci-theme-vantage luci-app-vantage"
+                "huchd0/luci-app-netwiz|https://github.com/huchd0/luci-app-netwiz.git|master|luci-app-netwiz"
+            )
+            required_feed_dirs+=(luci-theme-vantage luci-app-vantage luci-app-netwiz)
+            ;;
+    esac
 
     if [[ ${DAED_PACKAGES_ENABLED:-0} == "1" ]]; then
         # Keep sibling directories: luci-app-daede installs defaults from ../dae and ../daed.
@@ -651,15 +672,7 @@ install_custom_feed() {
         return 1
     fi
 
-    if supports_ucode_luci_themes; then
-        if ! sync_sparse_packages_to_feed_dir \
-            "https://github.com/sbwml/luci-theme-argon.git" "openwrt-25.12" \
-            "$custom_feed_dir" "sbwml/luci-theme-argon" \
-            luci-theme-argon luci-app-argon-config; then
-            rm -rf "$custom_feed_dir"
-            return 1
-        fi
-
+    if supports_ucode_luci_themes && [[ ${LUCI_STACK:-none} != none ]]; then
         if ! sync_repo_root_package_to_feed_dir \
             "https://github.com/eamonxg/luci-theme-aurora.git" "master" \
             "$custom_feed_dir" "eamonxg/luci-theme-aurora" "luci-theme-aurora"; then
@@ -670,6 +683,21 @@ install_custom_feed() {
         if ! sync_repo_root_package_to_feed_dir \
             "https://github.com/eamonxg/luci-app-aurora-config.git" "master" \
             "$custom_feed_dir" "eamonxg/luci-app-aurora-config" "luci-app-aurora-config"; then
+            rm -rf "$custom_feed_dir"
+            return 1
+        fi
+
+        if ! keep_aurora_standby "$custom_feed_dir/luci-theme-aurora"; then
+            rm -rf "$custom_feed_dir"
+            return 1
+        fi
+    fi
+
+    if supports_ucode_luci_themes && [[ ${LUCI_STACK:-none} == istore ]]; then
+        if ! sync_sparse_packages_to_feed_dir \
+            "https://github.com/sbwml/luci-theme-argon.git" "openwrt-25.12" \
+            "$custom_feed_dir" "sbwml/luci-theme-argon" \
+            luci-theme-argon luci-app-argon-config; then
             rm -rf "$custom_feed_dir"
             return 1
         fi
@@ -688,7 +716,7 @@ install_custom_feed() {
             rm -rf "$custom_feed_dir"
             return 1
         fi
-    else
+    elif [[ ${LUCI_STACK:-none} == istore ]]; then
         echo "当前 LuCI 不支持 ucode 主题模板，保留上游主题源码。"
     fi
 
@@ -710,7 +738,7 @@ install_custom_feed() {
         fix_honk_luci_vendor_install "$custom_feed_dir/luci-app-honk" || return 1
     fi
 
-    if ! verify_istore_apk_support "$custom_feed_dir/luci-app-store"; then
+    if [[ ${LUCI_STACK:-none} == istore ]] && ! verify_istore_apk_support "$custom_feed_dir/luci-app-store"; then
         rm -rf "$custom_feed_dir"
         return 1
     fi

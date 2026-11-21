@@ -166,6 +166,9 @@ GitHub Actions 的手动构建也提供 `add_fragments` 与 `remove_fragments` �
 
 默认片段由 `compilecfg/*.ini` 的 `CONFIG_FRAGMENTS` 指定：
 
+- `istore` 选择 Argon 主主题、iStore 商店、QuickStart 首页及其专用依赖。现有构建配置默认保留此片段。
+- `vantage` 选择 Vantage 主主题与仪表盘、NetWiz。此片段需要支持 ucode 主题的 LuCI，与 `istore` 互斥。
+- 两套组合都带 Aurora 备用；两组都不选时使用 Bootstrap。
 - `proxy` 选择代理相关软件包，是否默认包含以各设备的 `CONFIG_FRAGMENTS` 为准。
 - `honk` 选择 honk、luci-app-honk、GeoIP/GeoSite 数据和 eBPF/BTF 依赖，并控制对应 custom_feed 源码同步与配置校验；默认由 `jdcloud_ax6000_immwrt_honk` 使用。可通过 `ADD_CONFIG_FRAGMENTS=honk` 追加到兼容的 AArch64/x86_64 配置，或通过 `REMOVE_CONFIG_FRAGMENTS=honk` 移除。
 - `daed` 片段保留为可选项，选择 daed、luci-app-daede 和 eBPF/BTF 依赖，按需通过 `ADD_CONFIG_FRAGMENTS=daed` 使用。
@@ -175,6 +178,14 @@ GitHub Actions 的手动构建也提供 `add_fragments` 与 `remove_fragments` �
 `ADD_CONFIG_FRAGMENTS` 会在默认片段后追加，`REMOVE_CONFIG_FRAGMENTS` 会从最终片段中移除对应配置片段。移除只表示“不追加这个 fragment”，不会反向修改设备 `.config` 或 `compile_base.config` 中已经写明的配置。
 
 Dockerman 源码更新和 Docker nftables 兼容补丁同样以最终生效的 `docker_deps` 片段为开关：包含该片段时执行，不包含时跳过。因此通过 `ADD_CONFIG_FRAGMENTS=docker_deps` 可以临时加入 Docker 软件包并启用补丁，通过 `REMOVE_CONFIG_FRAGMENTS=docker_deps` 可以不再追加 Docker 软件包并禁用补丁。单独调用 `wrt_core/update.sh` 时，Docker 更新和补丁默认关闭，由构建入口传入片段解析结果。
+
+切换到 Vantage + NetWiz 时，同时追加 `vantage` 并移除 `istore`。要构建不含两套组合的固件，只移除当前默认的片段即可。软件包同步、补丁和校验随实际选中的片段启用；独立的 Mini Disk Manager 不受影响。
+
+```bash
+ADD_CONFIG_FRAGMENTS=vantage REMOVE_CONFIG_FRAGMENTS=istore ./build.sh S20-WIFI-NO config_preview
+```
+
+云编译时把 `vantage` 填到 `add_fragments`、`istore` 填到 `remove_fragments`。要永久切换某个设备，在其 `.ini` 的 `CONFIG_FRAGMENTS` 将 `istore` 替换成 `vantage`，保留其他片段。
 
 ## 7. 三方插件
 
@@ -204,8 +215,14 @@ https://github.com/kenzok8/small-package.git
 
 ## 9. OAF（应用过滤）功能使用说明
 
-使用 OAF（应用过滤）功能前，需先完成以下操作：
+OAF（应用过滤）默认关闭。新版 OAF 使用 `fwx` 配置，首次开启流量统计时在路由器上执行：
 
-1. 打开系统设置 → 启动项 → 定位到「appfilter」
-2. 将「appfilter」当前状态从已禁用更改为已启用
-3. 完成配置后，点击启动按钮激活服务
+```sh
+/etc/init.d/appfilter start
+uci set fwx.record.enable=1
+uci commit fwx
+/etc/init.d/appfilter enable
+/etc/init.d/appfilter restart
+```
+
+第一条命令初始化缺失的配置。旧版如果没有 `/etc/config/fwx`，在 LuCI 的「启动项」启用 `appfilter`，再到应用过滤页面设置所需功能。

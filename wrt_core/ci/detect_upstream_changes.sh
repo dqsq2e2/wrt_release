@@ -91,6 +91,7 @@ for model in "${MODELS[@]}"; do
         build.sh
         wrt_core/update.sh
         wrt_core/pre_clone_action.sh
+        wrt_core/setup_ci_environment.sh
         .github/workflows/release_wrt.yml
     )
     legacy_hash_files=(

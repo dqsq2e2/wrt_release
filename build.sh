@@ -209,6 +209,7 @@ EFFECTIVE_CONFIG_FRAGMENTS=()
 DOCKER_STACK_PATCHES_ENABLED=0
 DAED_PACKAGES_ENABLED=0
 HONK_PACKAGES_ENABLED=0
+LUCI_STACK=none
 
 parse_fragment_csv() {
     local csv=$1
@@ -316,6 +317,18 @@ resolve_config_fragments() {
     else
         HONK_PACKAGES_ENABLED=0
     fi
+
+    LUCI_STACK=none
+    if fragment_in_list istore "${EFFECTIVE_CONFIG_FRAGMENTS[@]}"; then
+        LUCI_STACK=istore
+    fi
+    if fragment_in_list vantage "${EFFECTIVE_CONFIG_FRAGMENTS[@]}"; then
+        if [[ $LUCI_STACK == istore ]]; then
+            echo "Error: istore and vantage are mutually exclusive; remove one fragment." >&2
+            return 1
+        fi
+        LUCI_STACK=vantage
+    fi
 }
 
 print_config_fragment_summary() {
@@ -328,6 +341,7 @@ print_config_fragment_summary() {
     echo "  Docker stack patches: $([[ $DOCKER_STACK_PATCHES_ENABLED == "1" ]] && echo enabled || echo skipped)"
     echo "  Daed packages: $([[ $DAED_PACKAGES_ENABLED == "1" ]] && echo enabled || echo skipped)"
     echo "  Honk packages: $([[ $HONK_PACKAGES_ENABLED == "1" ]] && echo enabled || echo skipped)"
+    echo "  LuCI stack: $LUCI_STACK"
     if [[ -n $EXPECTED_KERNEL ]]; then
         echo "  Expected kernel: $EXPECTED_KERNEL"
     fi
@@ -604,6 +618,7 @@ fi
 DOCKER_STACK_PATCHES_ENABLED="$DOCKER_STACK_PATCHES_ENABLED" \
     DAED_PACKAGES_ENABLED="$DAED_PACKAGES_ENABLED" \
     HONK_PACKAGES_ENABLED="$HONK_PACKAGES_ENABLED" \
+    LUCI_STACK="$LUCI_STACK" \
     "$BASE_PATH/update.sh" "$REPO_URL" "$REPO_BRANCH" "$BUILD_DIR" "$COMMIT_HASH"
 
 # 机型 files 覆盖层：wrt_core/files/<机型名>/ → 构建树 files/
@@ -625,6 +640,7 @@ verify_theme_config
 verify_apk_config
 verify_daed_config .config "$DAED_PACKAGES_ENABLED"
 verify_honk_config .config "$HONK_PACKAGES_ENABLED"
+verify_luci_stack_config .config "$LUCI_STACK"
 
 if [[ $Build_Mod == "debug" ]]; then
     exit 0

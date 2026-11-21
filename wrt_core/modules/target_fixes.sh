@@ -112,7 +112,11 @@ fix_default_set() {
     set_official_openwrt_apk_repo
     disable_default_apk_mirror
 
-    install -Dm544 "$BASE_PATH/patches/990_set_argon_primary" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/990_set_argon_primary"
+    if [[ $THEME_SET == argon ]]; then
+        install -Dm544 "$BASE_PATH/patches/990_set_argon_primary" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/990_set_argon_primary"
+    elif [[ $THEME_SET == vantage ]]; then
+        install -Dm544 "$BASE_PATH/patches/990_repair_vantage_selection" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/990_repair_vantage_selection"
+    fi
     install -Dm544 "$BASE_PATH/patches/991_custom_settings" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/991_custom_settings"
     install -Dm544 "$BASE_PATH/patches/992_set-wifi-uci.sh" "$BUILD_DIR/package/base-files/files/etc/uci-defaults/992_set-wifi-uci.sh"
 
@@ -131,7 +135,8 @@ fix_default_set() {
     # rpcd: legacy iStoreOS backends (quickstartd) require values.token in
     # session data. Dropping the patch file into the package's patches/ dir
     # lets the package build apply it to the extracted source.
-    if [ -d "$BUILD_DIR/package/system/rpcd" ] && [ -f "$BASE_PATH/patches/rpcd-session-values-token.patch" ]; then
+    if [[ ${LUCI_STACK:-none} == istore ]] &&
+       [ -d "$BUILD_DIR/package/system/rpcd" ] && [ -f "$BASE_PATH/patches/rpcd-session-values-token.patch" ]; then
         mkdir -p "$BUILD_DIR/package/system/rpcd/patches"
         \cp -f "$BASE_PATH/patches/rpcd-session-values-token.patch" \
             "$BUILD_DIR/package/system/rpcd/patches/999-session-values-token.patch"
@@ -145,7 +150,8 @@ apply_custom_feed_patches() {
     # thermal_zone0; C2558 coretemp exposes only temp2..temp5). A reject here
     # means the feed file drifted - rebase the patch, don't shadow it.
     local istore_lua="$BUILD_DIR/feeds/custom_feed/luci-app-quickstart/luasrc/controller/istore_backend.lua"
-    if [ -f "$istore_lua" ] && [ -f "$BASE_PATH/patches/istore_backend-lua.patch" ]; then
+    if [[ ${LUCI_STACK:-none} == istore ]] &&
+       [ -f "$istore_lua" ] && [ -f "$BASE_PATH/patches/istore_backend-lua.patch" ]; then
         (cd "$BUILD_DIR/feeds/custom_feed/luci-app-quickstart" && patch -p1 -N -r - -s < "$BASE_PATH/patches/istore_backend-lua.patch") \
             && echo "Applied istore_backend.lua velocloud_5x0 patch" \
             || echo "WARNING: istore_backend-lua.patch failed to apply cleanly - rebase needed" >&2
@@ -163,29 +169,6 @@ apply_custom_feed_patches() {
         else
             echo "WARNING: open-app-filter-no-bundled-acl.patch failed to apply cleanly - rebase needed" >&2
         fi
-    fi
-
-    # quickstart home tile links to /admin/services/appfilter, but luci-app-oaf
-    # registers /admin/services/oaf. Minified JS: sed is sturdier than a diff.
-    local qs_js="$BUILD_DIR/feeds/custom_feed/luci-app-quickstart/htdocs/luci-static/quickstart/index.js"
-    if [ -f "$qs_js" ] && grep -q "admin/services/appfilter" "$qs_js"; then
-        sed -i 's|admin/services/appfilter|admin/services/oaf|g' "$qs_js"
-        echo "Patched quickstart index.js appfilter -> oaf link"
-    fi
-
-    # Port card treats only linkState=="DOWN" as disconnected, so DSA slave
-    # ports (LOWERLAYERDOWN without cable) render as connected. UP = connected,
-    # everything else = disconnected.
-    if [ -f "$qs_js" ] && grep -q 'linkState=="DOWN"' "$qs_js"; then
-        sed -i 's|linkState=="DOWN"|linkState!="UP"|g' "$qs_js"
-        echo "Patched quickstart index.js linkState disconnected check"
-    fi
-
-    # Disk-info entries link to luci-app-diskman, but our builds ship
-    # luci-app-mini-diskmanager (both hrefs are the same diskman URL).
-    if [ -f "$qs_js" ] && grep -q "admin/system/diskman" "$qs_js"; then
-        sed -i 's|admin/system/diskman|admin/system/mini-diskmanager|g' "$qs_js"
-        echo "Patched quickstart index.js diskman -> mini-diskmanager link"
     fi
 
     # argon base font is 0.975rem (15.6px vs bootstrap 13px); use 0.875rem

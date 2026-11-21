@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# A sysupgrade can restore the old Argon setting when Argon is no longer installed.
+current=$(uci -q get luci.main.mediaurlbase)
+case "$current" in
+    /luci-static/*)
+        [ ! -d "/www$current" ] || exit 0
+        ;;
+esac
+
+[ -f /www/luci-static/vantage/vantage.css ] || exit 0
+uci -q set luci.main.mediaurlbase=/luci-static/vantage || exit 1
+uci -q commit luci
