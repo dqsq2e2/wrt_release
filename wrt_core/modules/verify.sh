@@ -115,27 +115,41 @@ verify_luci_stack_config() {
     local config_path="$1"
     local stack="$2"
     local pkg
+    local missing_packages=()
     local packages=()
 
     case "$stack" in
         istore)
-            packages=(luci-theme-argon luci-app-store quickstart luci-app-quickstart taskd luci-lib-taskd
-                      luci-lib-xterm kmod-md-mod luci-app-mini-diskmanager)
+            packages+=(luci-theme-argon luci-app-store quickstart luci-app-quickstart taskd luci-lib-taskd
+                       luci-lib-xterm kmod-md-mod luci-app-mini-diskmanager)
             ;;
         vantage)
-            packages=(luci-theme-vantage luci-app-vantage luci-app-netwiz)
+            packages+=(luci-theme-vantage luci-app-vantage luci-app-netwiz)
             ;;
     esac
     if [[ $stack != none ]]; then
         packages+=(luci-theme-aurora)
     fi
+    if [[ -d "$(dirname "$config_path")/feeds/luci/modules/luci-base/ucode" ]]; then
+        packages+=(luci-theme-bootstrap)
+        if [[ $stack != none ]]; then
+            packages+=(luci-app-aurora-config luci-i18n-aurora-config-zh-cn)
+        fi
+        if [[ $stack == istore ]]; then
+            packages+=(luci-app-argon-config luci-i18n-argon-config-zh-cn ucode-mod-math)
+        fi
+    fi
 
     for pkg in "${packages[@]}"; do
         if ! grep -qxF "CONFIG_PACKAGE_$pkg=y" "$config_path"; then
-            echo "Error: make defconfig dropped $pkg from the $stack LuCI stack." >&2
-            return 1
+            missing_packages+=("$pkg")
         fi
     done
+    if [[ ${#missing_packages[@]} -ne 0 ]]; then
+        printf 'Error: make defconfig dropped required packages for LuCI stack %s:\n' "$stack" >&2
+        printf '  - %s\n' "${missing_packages[@]}" >&2
+        return 1
+    fi
 }
 
 verify_daed_config() {

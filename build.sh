@@ -452,37 +452,6 @@ apply_config() {
 
 }
 
-verify_theme_config() {
-    local symbol
-    local required_symbols=(
-        "CONFIG_PACKAGE_luci-theme-bootstrap=y"
-        "CONFIG_PACKAGE_luci-theme-argon=y"
-        "CONFIG_PACKAGE_luci-app-argon-config=y"
-        "CONFIG_PACKAGE_luci-i18n-argon-config-zh-cn=y"
-        "CONFIG_PACKAGE_luci-theme-aurora=y"
-        "CONFIG_PACKAGE_luci-app-aurora-config=y"
-        "CONFIG_PACKAGE_luci-i18n-aurora-config-zh-cn=y"
-        "CONFIG_PACKAGE_ucode-mod-math=y"
-    )
-    local missing_symbols=()
-
-    if [[ ! -d feeds/luci/modules/luci-base/ucode ]]; then
-        return 0
-    fi
-
-    for symbol in "${required_symbols[@]}"; do
-        if ! grep -qxF "$symbol" .config; then
-            missing_symbols+=("$symbol")
-        fi
-    done
-
-    if [[ ${#missing_symbols[@]} -ne 0 ]]; then
-        printf 'Error: make defconfig dropped required LuCI theme settings:\n' >&2
-        printf '  - %s\n' "${missing_symbols[@]}" >&2
-        return 1
-    fi
-}
-
 verify_apk_config() {
     local symbol
     local required_symbols=(
@@ -490,7 +459,6 @@ verify_apk_config() {
         "CONFIG_SIGNED_PACKAGES=y"
         "CONFIG_PACKAGE_apk-openssl=y"
         "CONFIG_PACKAGE_openwrt-keyring=y"
-        "CONFIG_PACKAGE_luci-app-store=y"
     )
     local forbidden_symbols=(
         "CONFIG_PACKAGE_opkg=y"
@@ -636,7 +604,6 @@ cd "$BASE_PATH/../$BUILD_DIR"
 source "$BASE_PATH/modules/verify.sh"
 verify_expected_kernel_version "$EXPECTED_KERNEL" "target/linux/mediatek/Makefile"
 make defconfig
-verify_theme_config
 verify_apk_config
 verify_daed_config .config "$DAED_PACKAGES_ENABLED"
 verify_honk_config .config "$HONK_PACKAGES_ENABLED"

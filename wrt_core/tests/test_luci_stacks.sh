@@ -39,6 +39,57 @@ for stack in istore vantage none; do
 done
 echo 'PASS: selected stacks provide the required themes and packages'
 
+# Run the real build entry through its post-defconfig checks.
+project="$tmp/project"
+mkdir -p "$project/wrt_core/modules" "$tmp/bin"
+cp -a "$base/compilecfg" "$base/deconfig" "$project/wrt_core/"
+sed 's/\r$//' "$repo/build.sh" > "$project/build.sh"
+sed 's/\r$//' "$base/modules/verify.sh" > "$project/wrt_core/modules/verify.sh"
+cat > "$project/wrt_core/update.sh" <<'SH'
+#!/usr/bin/env bash
+set -eu
+mkdir -p "$3/feeds/luci/modules/luci-base/ucode"
+printf '%s\n' "$LUCI_STACK" > "$3/stack"
+SH
+cat > "$tmp/bin/make" <<'SH'
+#!/usr/bin/env bash
+set -eu
+[[ $1 == defconfig ]]
+sed -i 's/\r$//' .config
+printf '\nCONFIG_PACKAGE_openwrt-keyring=y\n' >> .config
+if [[ -n ${DROP_PACKAGE:-} ]]; then
+    sed -i "/^CONFIG_PACKAGE_$DROP_PACKAGE=y$/d" .config
+fi
+SH
+chmod +x "$project/wrt_core/update.sh" "$tmp/bin/make"
+
+debug_build() {
+    (cd "$project" && PATH="$tmp/bin:$PATH" bash build.sh MEDIATEK-WIFI-NO debug)
+}
+
+debug_build > "$tmp/debug-default"
+grep -qx istore "$project/owrt/stack"
+grep -qx CONFIG_PACKAGE_luci-app-store=y "$project/owrt/.config"
+ADD_CONFIG_FRAGMENTS=vantage REMOVE_CONFIG_FRAGMENTS=istore debug_build > "$tmp/debug-vantage"
+grep -qx vantage "$project/owrt/stack"
+grep -qx CONFIG_PACKAGE_luci-app-netwiz=y "$project/owrt/.config"
+if grep -Eq '^CONFIG_PACKAGE_(luci-app-store|luci-theme-argon)=y$' "$project/owrt/.config"; then
+    echo 'FAIL: Vantage build still includes the iStore stack' >&2
+    exit 1
+fi
+REMOVE_CONFIG_FRAGMENTS=istore debug_build > "$tmp/debug-none"
+grep -qx none "$project/owrt/stack"
+
+for package in luci-theme-vantage apk-openssl; do
+    if ADD_CONFIG_FRAGMENTS=vantage REMOVE_CONFIG_FRAGMENTS=istore DROP_PACKAGE="$package" \
+        debug_build > "$tmp/debug-missing" 2>&1; then
+        echo "FAIL: build accepted a config without $package" >&2
+        exit 1
+    fi
+    grep -Fq -- "$package" "$tmp/debug-missing"
+done
+echo 'PASS: debug builds validate each theme stack and APK independently'
+
 assets="$tmp/quickstart/htdocs/luci-static/quickstart"
 view="$tmp/quickstart/luasrc/view/quickstart"
 mkdir -p "$assets" "$view"
