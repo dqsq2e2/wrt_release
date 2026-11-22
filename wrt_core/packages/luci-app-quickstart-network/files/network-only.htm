@@ -1,0 +1,12 @@
+<%+header%>
+<% local json = require "luci.jsonc" %>
+<script>
+window.vue_base = <%=json.stringify(prefix .. "/")%>;
+window.token = <%=json.stringify(csrf)%>;
+window.vue_lang = <%=json.stringify(language)%>;
+document.body.classList.add("qs-network");
+</script>
+<link rel="stylesheet" href="/luci-static/quickstart-network/style.css?v=1">
+<div id="app"></div>
+<script type="module" src="/luci-static/quickstart-network/index.js?v=1"></script>
+<%+footer%>

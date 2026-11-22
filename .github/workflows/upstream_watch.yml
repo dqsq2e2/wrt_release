@@ -26,6 +26,7 @@ on:
       - "wrt_core/deconfig/fragments/**"
       - "wrt_core/modules/**"
       - "wrt_core/patches/**"
+      - "wrt_core/packages/**"
       - "wrt_core/update.sh"
       - "wrt_core/pre_clone_action.sh"
       - "wrt_core/ci/detect_upstream_changes.sh"

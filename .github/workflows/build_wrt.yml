@@ -87,6 +87,11 @@ jobs:
       - name: Build System Setup
         run: sudo bash wrt_core/setup_ci_environment.sh
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
       - name: Set Build Date and Timezone
         env:
           RAW_ADD_CONFIG_FRAGMENTS: ${{ inputs.add_fragments }}

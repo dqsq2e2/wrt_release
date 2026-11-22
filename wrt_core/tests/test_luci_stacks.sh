@@ -31,7 +31,7 @@ for stack in istore vantage none; do
     if [[ $stack != none ]]; then
         sed 's/\r$//' "$base/deconfig/fragments/$stack.config" >> "$tmp/config"
         grep -qx 'CONFIG_PACKAGE_luci-app-aurora-config=y' "$tmp/config"
-    elif grep -Eq '^CONFIG_PACKAGE_(luci-theme-(vantage|argon|aurora)|luci-app-quickstart|luci-app-netwiz)=y$' "$tmp/config"; then
+    elif grep -Eq '^CONFIG_PACKAGE_(luci-theme-(vantage|argon|aurora)|luci-app-quickstart(-network)?|quickstart|luci-app-netwiz)=y$' "$tmp/config"; then
         echo 'FAIL: optional stack packages are in the common config' >&2
         exit 1
     fi
@@ -60,6 +60,9 @@ printf '\nCONFIG_PACKAGE_openwrt-keyring=y\n' >> .config
 if [[ -n ${DROP_PACKAGE:-} ]]; then
     sed -i "/^CONFIG_PACKAGE_$DROP_PACKAGE=y$/d" .config
 fi
+if [[ -n ${ADD_PACKAGE:-} ]]; then
+    printf 'CONFIG_PACKAGE_%s=y\n' "$ADD_PACKAGE" >> .config
+fi
 SH
 chmod +x "$project/wrt_core/update.sh" "$tmp/bin/make"
 
@@ -70,23 +73,34 @@ debug_build() {
 debug_build > "$tmp/debug-default"
 grep -qx istore "$project/owrt/stack"
 grep -qx CONFIG_PACKAGE_luci-app-store=y "$project/owrt/.config"
+grep -qx CONFIG_PACKAGE_luci-app-quickstart=y "$project/owrt/.config"
 ADD_CONFIG_FRAGMENTS=vantage REMOVE_CONFIG_FRAGMENTS=istore debug_build > "$tmp/debug-vantage"
 grep -qx vantage "$project/owrt/stack"
-grep -qx CONFIG_PACKAGE_luci-app-netwiz=y "$project/owrt/.config"
-if grep -Eq '^CONFIG_PACKAGE_(luci-app-store|luci-theme-argon)=y$' "$project/owrt/.config"; then
-    echo 'FAIL: Vantage build still includes the iStore stack' >&2
+grep -qx CONFIG_PACKAGE_luci-app-store=y "$project/owrt/.config"
+grep -qx CONFIG_PACKAGE_luci-app-quickstart-network=y "$project/owrt/.config"
+if grep -Eq '^CONFIG_PACKAGE_(quickstart|luci-app-quickstart|luci-app-netwiz|luci-theme-argon)=y$' "$project/owrt/.config"; then
+    echo 'FAIL: Vantage build includes the full QuickStart or NetWiz' >&2
     exit 1
 fi
 REMOVE_CONFIG_FRAGMENTS=istore debug_build > "$tmp/debug-none"
 grep -qx none "$project/owrt/stack"
+grep -qx CONFIG_PACKAGE_luci-app-store=y "$project/owrt/.config"
 
-for package in luci-theme-vantage apk-openssl; do
+for package in luci-theme-vantage luci-app-quickstart-network luci-app-store apk-openssl; do
     if ADD_CONFIG_FRAGMENTS=vantage REMOVE_CONFIG_FRAGMENTS=istore DROP_PACKAGE="$package" \
         debug_build > "$tmp/debug-missing" 2>&1; then
         echo "FAIL: build accepted a config without $package" >&2
         exit 1
     fi
     grep -Fq -- "$package" "$tmp/debug-missing"
+done
+for package in quickstart luci-app-quickstart luci-app-netwiz; do
+    if ADD_CONFIG_FRAGMENTS=vantage REMOVE_CONFIG_FRAGMENTS=istore ADD_PACKAGE="$package" \
+        debug_build > "$tmp/debug-extra" 2>&1; then
+        echo "FAIL: Vantage build accepted $package" >&2
+        exit 1
+    fi
+    grep -Fq -- "cannot include $package" "$tmp/debug-extra"
 done
 echo 'PASS: debug builds validate each theme stack and APK independently'
 

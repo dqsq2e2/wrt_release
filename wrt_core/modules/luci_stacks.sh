@@ -49,26 +49,20 @@ keep_aurora_standby() {
 }
 
 prepare_vantage_stack() {
-    local feed theme netwiz file
+    local feed theme css
     feed=$(get_custom_feed_worktree_dir)
     theme="$feed/luci-theme-vantage"
-    netwiz="$feed/luci-app-netwiz"
+    css="$theme/htdocs/luci-static/vantage/vantage.css"
 
-    if [[ ! -f "$theme/htdocs/luci-static/vantage/vantage.css" ||
+    if [[ ! -f $css ||
           ! -d "$theme/ucode/template/themes/vantage" ]]; then
         echo "Error: Vantage theme is missing its runtime assets." >&2
         return 1
     fi
 
-    # NetWiz stages these files from root/ with the source modes.
-    for file in \
-        usr/libexec/rpcd/netwiz usr/libexec/rpcd/netwiz_dev \
-        usr/libexec/netwiz-autodetect.sh usr/libexec/netwiz-monitor-loop.sh \
-        etc/init.d/netwiz-monitor etc/init.d/netwiz-recovery \
-        etc/init.d/netwiz-watchdog etc/hotplug.d/dhcp/99-netwiz-guard; do
-        if ! chmod 755 "$netwiz/root/$file"; then
-            echo "Error: cannot make NetWiz script executable: $file" >&2
-            return 1
-        fi
-    done
+    if ! patch -d "$theme" -p1 --batch --forward --fuzz=0 < "$BASE_PATH/patches/vantage-ui.patch"; then
+        echo "Error: the Vantage UI patch no longer matches the upstream theme." >&2
+        return 1
+    fi
+    install -m644 "$BASE_PATH/patches/vantage-istore.css" "$(dirname "$css")/istore-tabs.css"
 }

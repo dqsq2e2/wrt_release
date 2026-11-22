@@ -1,0 +1,60 @@
+
+/* iStore uses its own Vue tabs. Keep its routing and use Vantage's segments. */
+.vt-main #app > ul.tabs:has(> li > a[href^="/cgi-bin/luci/admin/store/pages/"]) {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: stretch;
+	width: fit-content;
+	max-width: 100%;
+	min-height: var(--ctl-h);
+	margin: 0 0 var(--sp-5);
+	padding: 0;
+	list-style: none;
+	background: var(--seg-bg);
+	border-radius: var(--r-lg);
+	box-shadow: inset 0 0 0 1px var(--line);
+}
+.vt-main #app > ul.tabs:has(> li > a[href^="/cgi-bin/luci/admin/store/pages/"]) > li {
+	display: flex;
+	max-width: 100%;
+	margin: 0;
+	list-style: none;
+}
+.vt-main #app > ul.tabs:has(> li > a[href^="/cgi-bin/luci/admin/store/pages/"]) > .auto {
+	display: none;
+}
+.vt-main #app > ul.tabs > li > a[href^="/cgi-bin/luci/admin/store/pages/"] {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	justify-content: center;
+	min-height: var(--ctl-h);
+	padding: 0 10px;
+	border: 3px solid transparent;
+	border-radius: calc(var(--r) + 3px);
+	background-clip: padding-box;
+	color: var(--text-2);
+	font-weight: 500;
+	white-space: nowrap;
+	text-decoration: none;
+}
+.vt-main #app > ul.tabs > li > a[href^="/cgi-bin/luci/admin/store/pages/"]:hover {
+	color: var(--text);
+}
+.vt-main #app > ul.tabs > li > a[href^="/cgi-bin/luci/admin/store/pages/"]:focus-visible {
+	outline-offset: -1px;
+}
+.vt-main #app > ul.tabs > li:is(.active, .cbi-tab) > a[href^="/cgi-bin/luci/admin/store/pages/"] {
+	background-color: var(--seg-on);
+	color: var(--accent-text);
+	font-weight: 600;
+	box-shadow: var(--seg-on-ring);
+}
+@media (max-width: 640px) {
+	.vt-main #app > ul.tabs:has(> li > a[href^="/cgi-bin/luci/admin/store/pages/"]) {
+		width: 100%;
+	}
+	.vt-main #app > ul.tabs:has(> li > a[href^="/cgi-bin/luci/admin/store/pages/"]) > li {
+		flex: 1 1 auto;
+	}
+}

@@ -166,8 +166,9 @@ GitHub Actions 的手动构建也提供 `add_fragments` 与 `remove_fragments` �
 
 默认片段由 `compilecfg/*.ini` 的 `CONFIG_FRAGMENTS` 指定：
 
-- `istore` 选择 Argon 主主题、iStore 商店、QuickStart 首页及其专用依赖。现有构建配置默认保留此片段。
-- `vantage` 选择 Vantage 主主题与仪表盘、NetWiz。此片段需要支持 ucode 主题的 LuCI，与 `istore` 互斥。
+- iStore 商店及其依赖在公共配置中，不随主题切换；不选主题片段时也会安装。
+- `istore` 选择 Argon 主主题和完整的 QuickStart 首页。现有构建配置默认保留此片段。
+- `vantage` 选择 Vantage 主主题与仪表盘，配套仅包含网络向导和网口配置的 QuickStart。不安装 NetWiz 或完整 QuickStart。主题适配包含 Docker、管控、网络向导和 iStore 的图标，以及 iStore 的四个侧边栏子菜单和顶部标签。此片段需要支持 ucode 主题的 LuCI；本地编译还需 Node.js 22.12 或以上的 22.x 版本及 npm。
 - 两套组合都带 Aurora 备用；两组都不选时使用 Bootstrap。
 - `proxy` 选择代理相关软件包，是否默认包含以各设备的 `CONFIG_FRAGMENTS` 为准。
 - `honk` 选择 honk、luci-app-honk、GeoIP/GeoSite 数据和 eBPF/BTF 依赖，并控制对应 custom_feed 源码同步与配置校验；默认由 `jdcloud_ax6000_immwrt_honk` 使用。可通过 `ADD_CONFIG_FRAGMENTS=honk` 追加到兼容的 AArch64/x86_64 配置，或通过 `REMOVE_CONFIG_FRAGMENTS=honk` 移除。
@@ -179,7 +180,7 @@ GitHub Actions 的手动构建也提供 `add_fragments` 与 `remove_fragments` �
 
 Dockerman 源码更新和 Docker nftables 兼容补丁同样以最终生效的 `docker_deps` 片段为开关：包含该片段时执行，不包含时跳过。因此通过 `ADD_CONFIG_FRAGMENTS=docker_deps` 可以临时加入 Docker 软件包并启用补丁，通过 `REMOVE_CONFIG_FRAGMENTS=docker_deps` 可以不再追加 Docker 软件包并禁用补丁。单独调用 `wrt_core/update.sh` 时，Docker 更新和补丁默认关闭，由构建入口传入片段解析结果。
 
-切换到 Vantage + NetWiz 时，同时追加 `vantage` 并移除 `istore`。要构建不含两套组合的固件，只移除当前默认的片段即可。软件包同步、补丁和校验随实际选中的片段启用；独立的 Mini Disk Manager 不受影响。
+切换到 Vantage 时，同时追加 `vantage` 并移除 `istore`。要构建不含两套主题组合的固件，只移除当前默认的片段即可。iStore 商店和 Mini Disk Manager 仍随公共配置安装。
 
 ```bash
 ADD_CONFIG_FRAGMENTS=vantage REMOVE_CONFIG_FRAGMENTS=istore ./build.sh S20-WIFI-NO config_preview

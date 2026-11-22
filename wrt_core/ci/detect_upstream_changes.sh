@@ -125,6 +125,12 @@ for model in "${MODELS[@]}"; do
         legacy_hash_files+=("$patch_file")
     done < <(find wrt_core/patches -type f -print | sort)
 
+    if [[ ,$config_fragments, == *,vantage,* ]]; then
+        while IFS= read -r package_file; do
+            hash_files+=("$package_file")
+        done < <(find wrt_core/packages/luci-app-quickstart-network -type f -print | sort)
+    fi
+
     config_hash=$(calculate_git_hash "$SOURCE_COMMIT" "${hash_files[@]}")
     fingerprint=$(printf '%s\n%s\n%s\n%s\n' "$repo_url" "$repo_branch" "$upstream_sha" "$config_hash" | sha256sum | awk '{print $1}')
     cache_key="upstream-watch-${model}-${fingerprint}"

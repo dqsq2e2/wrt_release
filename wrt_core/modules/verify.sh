@@ -65,12 +65,13 @@ verify_custom_feed_installed_paths() {
         luci-app-wolultra luci-app-mini-diskmanager luci-app-homeproxy sing-box
         axonhub luci-app-axonhub gecoosac luci-app-gecoosac
         luci-app-tingreader luci-app-upnp miniupnpd
+        luci-app-store taskd luci-lib-taskd luci-lib-xterm
     )
     local missing_package_dirs=()
 
     case "${LUCI_STACK:-none}" in
-        istore) required_package_dirs+=(quickstart luci-app-quickstart taskd luci-lib-xterm luci-lib-taskd luci-app-store) ;;
-        vantage) required_package_dirs+=(luci-theme-vantage luci-app-vantage luci-app-netwiz) ;;
+        istore) required_package_dirs+=(quickstart luci-app-quickstart) ;;
+        vantage) required_package_dirs+=(luci-theme-vantage luci-app-vantage luci-app-quickstart-network) ;;
     esac
 
     if [[ ${DAED_PACKAGES_ENABLED:-0} == "1" ]]; then
@@ -116,15 +117,16 @@ verify_luci_stack_config() {
     local stack="$2"
     local pkg
     local missing_packages=()
-    local packages=()
+    local packages=(luci-app-store taskd luci-lib-taskd luci-lib-xterm)
+    local excluded=()
 
     case "$stack" in
         istore)
-            packages+=(luci-theme-argon luci-app-store quickstart luci-app-quickstart taskd luci-lib-taskd
-                       luci-lib-xterm kmod-md-mod luci-app-mini-diskmanager)
+            packages+=(luci-theme-argon quickstart luci-app-quickstart kmod-md-mod luci-app-mini-diskmanager)
             ;;
         vantage)
-            packages+=(luci-theme-vantage luci-app-vantage luci-app-netwiz)
+            packages+=(luci-theme-vantage luci-app-vantage luci-app-quickstart-network)
+            excluded+=(quickstart luci-app-quickstart luci-app-netwiz)
             ;;
     esac
     if [[ $stack != none ]]; then
@@ -150,6 +152,12 @@ verify_luci_stack_config() {
         printf '  - %s\n' "${missing_packages[@]}" >&2
         return 1
     fi
+    for pkg in "${excluded[@]}"; do
+        if grep -qxF "CONFIG_PACKAGE_$pkg=y" "$config_path"; then
+            printf 'Error: LuCI stack %s cannot include %s.\n' "$stack" "$pkg" >&2
+            return 1
+        fi
+    done
 }
 
 verify_daed_config() {

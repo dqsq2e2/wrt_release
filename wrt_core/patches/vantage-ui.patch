@@ -1,0 +1,133 @@
+diff --git a/htdocs/luci-static/resources/menu-vantage.js b/htdocs/luci-static/resources/menu-vantage.js
+index 8954745..ff1d935 100644
+--- a/htdocs/luci-static/resources/menu-vantage.js
++++ b/htdocs/luci-static/resources/menu-vantage.js
+@@ -140,6 +140,10 @@ const callLookRevert = rpc.declare({ object: 'uci', method: 'revert', params: [
+ /* 24px stroke icons, drawn for this theme: constant [tag, attributes] lists,
+    built with createElementNS (no markup parsing, no user data) */
+ const ICONS = {
++	docker: [ [ 'path', { d: 'M2.5 13h14c1 0 1.8-.3 2.4-.9-.5-.7-.7-1.6-.5-2.6 1 .2 1.9.8 2.2 1.6.6-.1 1.2 0 1.9.3-.6 1.4-1.7 2.1-3.1 2.2-1 3.4-4 5.4-8.2 5.4h-2c-3.6 0-6.3-2.2-6.7-6z' } ], [ 'path', { d: 'M5 13V9h12v4M9 9V5h4v8M9 9v4' } ], [ 'circle', { cx: '6.8', cy: '15.7', r: '.4' } ] ],
++	control: [ [ 'path', { d: 'M10 5H3M21 5h-7M14 3v4M8 10v4M8 12H3m9 0h9M12 19H3m13 0h5m-5-2v4' } ] ],
++	store: [ [ 'path', { d: 'M4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9M3 10l2-6h14l2 6' } ], [ 'path', { d: 'M3 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M9 20v-5h6v5' } ] ],
++	network_guide: [ [ 'path', { d: 'm21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72M14 7l3 3M5 6v4M3 8h4m12 6v4m-2-2h4' } ] ],
+ 	dashboard: [ [ 'rect', { x: '3.5', y: '3.5', width: '7', height: '9', rx: '1.5' } ], [ 'rect', { x: '13.5', y: '3.5', width: '7', height: '5', rx: '1.5' } ], [ 'rect', { x: '13.5', y: '11.5', width: '7', height: '9', rx: '1.5' } ], [ 'rect', { x: '3.5', y: '15.5', width: '7', height: '5', rx: '1.5' } ] ],
+ 	status: [ [ 'path', { d: 'M3 12h3.5l2.5-6.5 5 13 2.5-6.5H21' } ] ],
+ 	system: [ [ 'rect', { x: '5.5', y: '5.5', width: '13', height: '13', rx: '2' } ], [ 'rect', { x: '9.5', y: '9.5', width: '5', height: '5', rx: '.8' } ], [ 'path', { d: 'M9.5 2.5v3M14.5 2.5v3M9.5 18.5v3M14.5 18.5v3M2.5 9.5h3M2.5 14.5h3M18.5 9.5h3M18.5 14.5h3' } ] ],
+@@ -162,12 +166,49 @@ const ICONS = {
+ };
+ 
+ function iconFor(name) {
++	if (/^(docker|control|store|network_guide)$/.test(name)) return name;
+ 	if (/overview|dashboard|home/.test(name)) return 'dashboard';
+ 	if (/^(status|system|network|services|vpn|statistics)$/.test(name)) return name;
+ 	if (/nas|storage|disk/.test(name)) return 'storage';
+ 	return 'generic';
+ }
+ 
++const STORE_PAGES = [
++	[ 'installed', 'Installed', '\u5df2\u5b89\u88c5' ],
++	[ 'store', 'All apps', '\u5168\u90e8\u8f6f\u4ef6' ],
++	[ 'upload', 'Manual install', '\u624b\u52a8\u5b89\u88c5' ],
++	[ 'maintance', 'Maintenance', '\u7ef4\u62a4' ]
++];
++
++function pageSegments(cat, page) {
++	return page.path || [ 'admin', cat.name, page.name ];
++}
++
++function pathKey(url) {
++	return new URL(url, location.href).pathname.replace(/\/+$/, '');
++}
++
++function pageActive(dp, cat, page) {
++	return page.path ? pathKey(L.url.apply(L, page.path)) === pathKey(location.href)
++		: dp[1] === cat.name && dp[2] === page.name;
++}
++
++function watchStoreLinks() {
++	const sync = () => {
++		const current = pathKey(location.href);
++		document.querySelectorAll('#vt-rail-list [data-cat="store"] .vt-rail-sub a, #vt-flyout[data-cat="store"] .vt-fly-link').forEach(a => {
++			if (pathKey(a.href) === current) a.setAttribute('aria-current', 'page');
++			else a.removeAttribute('aria-current');
++		});
++	};
++	window.addEventListener('popstate', sync);
++	if (window.navigation) window.navigation.addEventListener('currententrychange', sync);
++	else {
++		const app = document.getElementById('app');
++		if (app) new MutationObserver(sync).observe(app, { childList: true, subtree: true, attributes: true, attributeFilter: [ 'class' ] });
++	}
++}
++
+ const SVGNS = 'http://www.w3.org/2000/svg';
+ 
+ /* SVG elements from constant descriptions (ICONS, chart defs, chart
+@@ -1072,6 +1113,15 @@ return baseclass.extend({
+ 			.filter(c => c.name !== 'logout')
+ 			.map(c => {
+ 				const raw = admin.children[c.name];
++				if (c.name === 'store' && raw?.children?.pages) {
++					const zh = /^zh(?:[-_]|$)/i.test(document.documentElement.lang || L.env.lang || '');
++					return {
++						name: c.name, title: _(c.title), icon: iconFor(c.name), leaf: false,
++						pages: STORE_PAGES.map(([ name, en, cn ]) => ({
++							name, title: zh ? cn : en, subs: [], path: [ 'admin', 'store', 'pages', name ]
++						}))
++					};
++				}
+ 				const pages = ui.menu.getChildren(c).map(p => {
+ 					const rawPage = raw && raw.children && raw.children[p.name];
+ 					return {
+@@ -1091,6 +1141,8 @@ return baseclass.extend({
+ 			.filter(c => c.leaf || c.pages.length);
+ 
+ 		this.renderRail();
++		if (this.dp[1] === 'store' && this.cats.some(c => c.name === 'store' && c.pages.some(p => p.path)))
++			watchStoreLinks();
+ 		this.renderCrumbs();
+ 		this.renderTabs();
+ 		this.buildIndex();
+@@ -1147,8 +1199,8 @@ return baseclass.extend({
+ 				/* pinned rail: inline pages */
+ 				const sub = E('ul', { 'class': 'vt-rail-sub' });
+ 				for (const p of cat.pages) {
+-					const cur = this.dp[1] === cat.name && this.dp[2] === p.name;
+-					sub.appendChild(E('li', {}, E('a', { 'href': L.url('admin', cat.name, p.name), 'aria-current': cur ? 'page' : null }, [ p.title ])));
++					const cur = pageActive(this.dp, cat, p);
++					sub.appendChild(E('li', {}, E('a', { 'href': L.url.apply(L, pageSegments(cat, p)), 'aria-current': cur ? 'page' : null }, [ p.title ])));
+ 				}
+ 				li.appendChild(link);
+ 				li.appendChild(sub);
+@@ -1329,8 +1381,8 @@ return baseclass.extend({
+ 			]));
+ 			const ul = E('ul', { 'class': 'vt-fly-list', 'role': 'list' });
+ 			for (const p of cat.pages) {
+-				const cur = this.dp[1] === cat.name && this.dp[2] === p.name;
+-				const item = E('li', {}, E('a', { 'class': 'vt-fly-link', 'href': L.url('admin', cat.name, p.name), 'aria-current': cur ? 'page' : null }, [
++				const cur = pageActive(this.dp, cat, p);
++				const item = E('li', {}, E('a', { 'class': 'vt-fly-link', 'href': L.url.apply(L, pageSegments(cat, p)), 'aria-current': cur ? 'page' : null }, [
+ 					E('span', {}, [ p.title ])
+ 				]));
+ 				if (p.subs.length > 1) {
+@@ -1530,7 +1582,7 @@ return baseclass.extend({
+ 		for (const c of this.cats) {
+ 			if (c.leaf) add({ title: c.title, path: '', group: c.title, segs: [ 'admin', c.name ] });
+ 			for (const p of c.pages) {
+-				add({ title: p.title, path: c.title, group: c.title, segs: [ 'admin', c.name, p.name ] });
++				add({ title: p.title, path: c.title, group: c.title, segs: pageSegments(c, p) });
+ 				if (p.subs.length > 1)
+ 					for (const s of p.subs)
+ 						if (headingKey(s.title) !== headingKey(p.title))
+diff --git a/ucode/template/themes/vantage/header.ut b/ucode/template/themes/vantage/header.ut
+index 8563918..50d2b8a 100644
+--- a/ucode/template/themes/vantage/header.ut
++++ b/ucode/template/themes/vantage/header.ut
+@@ -98,6 +98,7 @@
+ </script>
+ <link rel="stylesheet" href="{{ media }}/vantage.css">
+ <link rel="stylesheet" href="{{ media }}/icons.css">
++<link rel="stylesheet" href="{{ media }}/istore-tabs.css?v=1">
+ <link rel="icon" href="{{ media }}/logo.svg" type="image/svg+xml">
+ <script src="{{ entityencode(dispatcher.build_url('admin/translations', dispatcher.lang), true) }}"></script>
+ <script src="{{ resource }}/cbi.js"></script>

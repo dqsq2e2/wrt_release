@@ -576,6 +576,7 @@ install_custom_feed() {
         luci-app-emmc-health luci-app-airoha-npu luci-app-wolultra luci-app-mini-diskmanager
         axonhub luci-app-axonhub gecoosac luci-app-gecoosac sing-box
         luci-app-tingreader luci-app-velo5x0-fan luci-app-ztc1control
+        luci-app-store taskd luci-lib-taskd luci-lib-xterm
     )
     local custom_feed_sources=()
     local missing_feed_dirs=()
@@ -608,6 +609,7 @@ install_custom_feed() {
     fi
     custom_feed_sources=(
         "kenzok8/small-package|https://github.com/kenzok8/small-package.git||${base_custom_feed_packages[*]}"
+        "linkease/istore|https://github.com/linkease/istore.git|main|luci/taskd luci/luci-lib-xterm luci/luci-lib-taskd luci/luci-app-store"
         "4IceG/luci-app-mini-diskmanager|https://github.com/4IceG/luci-app-mini-diskmanager.git|main|luci-app-mini-diskmanager"
         "sbwml/luci-app-mosdns|https://github.com/sbwml/luci-app-mosdns.git|v5|mosdns luci-app-mosdns geo2txt"
         "Openwrt-Passwall/openwrt-passwall|https://github.com/Openwrt-Passwall/openwrt-passwall.git|main|luci-app-passwall"
@@ -617,10 +619,7 @@ install_custom_feed() {
 
     case "${LUCI_STACK:-none}" in
         istore)
-            custom_feed_sources+=(
-                "linkease/istore|https://github.com/linkease/istore.git|main|luci/taskd luci/luci-lib-xterm luci/luci-lib-taskd luci/luci-app-store"
-            )
-            required_feed_dirs+=(quickstart luci-app-quickstart taskd luci-lib-xterm luci-lib-taskd luci-app-store)
+            required_feed_dirs+=(quickstart luci-app-quickstart)
             ;;
         vantage)
             if ! supports_ucode_luci_themes; then
@@ -629,9 +628,8 @@ install_custom_feed() {
             fi
             custom_feed_sources+=(
                 "anothaDev/luci-theme-vantage|https://github.com/anothaDev/luci-theme-vantage.git||luci-theme-vantage luci-app-vantage"
-                "huchd0/luci-app-netwiz|https://github.com/huchd0/luci-app-netwiz.git|master|luci-app-netwiz"
             )
-            required_feed_dirs+=(luci-theme-vantage luci-app-vantage luci-app-netwiz)
+            required_feed_dirs+=(luci-theme-vantage luci-app-vantage luci-app-quickstart-network)
             ;;
     esac
 
@@ -738,7 +736,10 @@ install_custom_feed() {
         fix_honk_luci_vendor_install "$custom_feed_dir/luci-app-honk" || return 1
     fi
 
-    if [[ ${LUCI_STACK:-none} == istore ]] && ! verify_istore_apk_support "$custom_feed_dir/luci-app-store"; then
+    if [[ ${LUCI_STACK:-none} == vantage ]]; then
+        cp -a "$BASE_PATH/packages/luci-app-quickstart-network" "$custom_feed_dir/" || return 1
+    fi
+    if ! verify_istore_apk_support "$custom_feed_dir/luci-app-store"; then
         rm -rf "$custom_feed_dir"
         return 1
     fi

@@ -1,0 +1,120 @@
+diff --git a/backend/cmd/network-only/main.go b/backend/cmd/network-only/main.go
+new file mode 100644
+index 0000000..72b69fc
+--- /dev/null
++++ b/backend/cmd/network-only/main.go
+@@ -0,0 +1,22 @@
++package main
++
++import (
++	"log"
++	"net/http"
++	"time"
++
++	"github.com/istoreos/quickstart/backend/server"
++	"github.com/istoreos/quickstart/backend/service"
++)
++
++func main() {
++	srv := &http.Server{
++		Addr:              "127.0.0.1:3038",
++		Handler:           server.NetworkOnly(service.NewServiceBackend()),
++		ReadHeaderTimeout: 5 * time.Second,
++		ReadTimeout:       20 * time.Second,
++		IdleTimeout:       10 * time.Second,
++		MaxHeaderBytes:    16 * 1024,
++	}
++	log.Fatal(srv.ListenAndServe())
++}
+diff --git a/backend/server/network_only.go b/backend/server/network_only.go
+new file mode 100644
+index 0000000..314b577
+--- /dev/null
++++ b/backend/server/network_only.go
+@@ -0,0 +1,43 @@
++package server
++
++import (
++	"net/http"
++	"strings"
++
++	"github.com/istoreos/quickstart/backend/modules/homeconfig"
++	"github.com/istoreos/quickstart/backend/service"
++	"github.com/julienschmidt/httprouter"
++)
++
++func NetworkOnly(backend *service.ServiceBackend) http.Handler {
++	return networkOnly(backend, homeconfig.RootAuthorizer(homeconfig.LocalSession))
++}
++
++func networkOnly(backend *service.ServiceBackend, authorize homeconfig.Authorize) http.Handler {
++	router := httprouter.New()
++	registerNetworkRoutes(router, backend)
++	registerGuideCoreRoutes(router, backend)
++
++	methods := map[string]string{
++		"/network/interface/config/": "GET POST",
++		"/u/network/status/":         "GET",
++		"/guide/pppoe/":              "GET POST",
++		"/guide/client-mode/":        "GET POST",
++		"/guide/lan/":                "GET",
++		"/guide/gateway-router/":     "POST",
++	}
++	return secureHTTP(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		path, found := strings.CutPrefix(r.URL.Path, "/cgi-bin/luci/istore")
++		if !found || methods[path] == "" {
++			http.NotFound(w, r)
++			return
++		}
++		allowed := methods[path]
++		if !strings.Contains(" "+allowed+" ", " "+r.Method+" ") {
++			w.Header().Set("Allow", allowed)
++			w.WriteHeader(http.StatusMethodNotAllowed)
++			return
++		}
++		router.ServeHTTP(w, r)
++	}), authorize)
++}
+diff --git a/backend/server/network_only_test.go b/backend/server/network_only_test.go
+new file mode 100644
+index 0000000..699b31c
+--- /dev/null
++++ b/backend/server/network_only_test.go
+@@ -0,0 +1,37 @@
++package server
++
++import (
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++
++	"github.com/istoreos/quickstart/backend/modules/homeconfig"
++	"github.com/istoreos/quickstart/backend/service"
++)
++
++func TestNetworkOnlyRejectsOutOfScopeRequests(t *testing.T) {
++	handler := networkOnly(service.NewServiceBackend(), func(*http.Request) (homeconfig.Access, error) {
++		return homeconfig.Access{Read: true, Write: true}, nil
++	})
++	for _, tc := range []struct {
++		method, path, origin string
++		status               int
++	}{
++		{"GET", "/cgi-bin/luci/istore/network/device/list/", "", http.StatusNotFound},
++		{"GET", "/cgi-bin/luci/istore/guide/gateway-router/", "", http.StatusMethodNotAllowed},
++		{"POST", "/cgi-bin/luci/istore/guide/pppoe/", "https://example.invalid", http.StatusForbidden},
++		{"POST", "/cgi-bin/luci/istore/network/interface/config/", "https://example.invalid", http.StatusForbidden},
++	} {
++		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
++			request := httptest.NewRequest(tc.method, tc.path, strings.NewReader("{}"))
++			request.Header.Set("Content-Type", "application/json")
++			request.Header.Set("Origin", tc.origin)
++			response := httptest.NewRecorder()
++			handler.ServeHTTP(response, request)
++			if response.Code != tc.status {
++				t.Fatalf("status = %d, want %d", response.Code, tc.status)
++			}
++		})
++	}
++}

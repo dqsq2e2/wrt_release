@@ -1,0 +1,1185 @@
+diff --git a/web/src/main.ts b/web/src/main.ts
+index 7d019b8..d5187e6 100644
+--- a/web/src/main.ts
++++ b/web/src/main.ts
+@@ -18,9 +18,7 @@ import EditableSelect from "/@/components/editable-select/index.vue"
+ 
+ import installComponents from "/@/plugins/componnets"
+ import { createI18n } from '/@/plugins/i18n'
+-import { initializeTheme } from '/@/utils/theme'
+-
+-initializeTheme()
++import './style/network-vantage.css'
+ const app = createApp(App)
+ app.component("svg-menu", SvgMenu)
+ app.component("svg-system", SvgSytem)
+@@ -37,7 +35,7 @@ app.component("switch-box", SwitchBox)
+ app.component("editable-select", EditableSelect)
+ app.use(installComponents) //注册全局组件
+ import { createPinia } from 'pinia'
+-import { router } from "/@/plugins/router"
++import { router } from "/@/plugins/router/network-only"
+ app.use(router)
+ app.use(createPinia())
+ createI18n(app)
+diff --git a/web/src/pages/interfaceconfig/index.vue b/web/src/pages/interfaceconfig/index.vue
+index 8044508..f40e636 100644
+--- a/web/src/pages/interfaceconfig/index.vue
++++ b/web/src/pages/interfaceconfig/index.vue
+@@ -1,110 +1,67 @@
+ <template>
+-    <div id="page">
+-        <h2 name="content">{{ $gettext("网口配置") }}</h2>
+-        <div class="container">
+-            <div class="table-wrapper">
+-                <!-- 表头 -->
+-                <div class="table-header">
+-                    <div class="header-cell device-col" v-for="item in porter.devices" :key="item.name">
+-                        <div class="interface-device-flex">
+-                            <item-vue :item="item" />
+-                        </div>
+-                    </div>
+-                    <div class="header-cell spacer-col"></div>
+-                    <div class="header-cell"></div>
+-                    <div class="header-cell action-col"></div>
+-                </div>
+-
+-                <!-- 表体 -->
+-                <div class="table-body">
+-                    <!-- LAN接口行 -->
+-                    <template v-for="(item, i) in interfaces.lan" :key="i">
+-                        <div class="table-row">
+-                            <div class="table-cell device-col" v-for="device in porter.devices" :key="device.name">
+-                                <input type="checkbox" :name="device.name" :value="device.name"
+-                                    v-model="item.deviceNames" @input="onCheckboxChange($event, i)">
+-                            </div>
+-                            <div class="table-cell spacer-col"></div>
+-                            <div class="table-cell name-col">
+-                                <b>{{ item.name }}</b>
+-                            </div>
+-                            <div class="table-cell action-col">
+-                                <button class="btn cbi-button cbi-button-apply" :title="$gettext('编辑')"
+-                                    @click="AddInterfaces('lan', i)">
+-                                    {{ $gettext("编辑") }}
+-                                </button>
+-                                <template v-if="i !== 0">
+-                                    <button class="cbi-button cbi-button-remove" @click="DelInterfaces('lan', i)">
+-                                        {{ $gettext("删除") }}
+-                                    </button>
+-                                </template>
+-                            </div>
+-                        </div>
+-                    </template>
+-
+-                    <!-- 添加LAN按钮行 -->
+-                    <div class="table-row add-row" @click="AddInterfaces('lan')">
+-                        <div class="table-cell device-col" v-for="item in porter.devices" :key="item.name"></div>
+-                        <div class="table-cell spacer-col"></div>
+-                        <div class="table-cell name-col"></div>
+-                        <div class="table-cell action-col">
+-                            <AddSvg class="icon" />
+-                        </div>
+-                    </div>
+-
+-                    <!-- WAN接口行 -->
+-                    <template v-for="(item, i) in interfaces.wan" :key="i">
+-                        <div class="table-row">
+-                            <div class="table-cell device-col" v-for="device in porter.devices" :key="device.name">
+-                                <input type="checkbox" :name="device.name" :value="device.name"
+-                                    v-model="item.deviceNames" @input="onCheckboxWan($event, i)">
++    <div class="qs-ports">
++        <h2 name="content" class="qs-ports-title">{{ $gettext("网口配置") }}</h2>
++        <div class="qs-ports-scroll" role="region" :aria-label="$gettext('网口配置')" tabindex="0">
++            <table class="qs-port-matrix" :style="{ '--qs-port-count': Math.max(1, porter.devices.length) }">
++                <thead>
++                    <tr>
++                        <th class="qs-fixed" scope="col">{{ $gettext("接口") }}</th>
++                        <th v-for="device in porter.devices" :key="device.name" scope="col">
++                            <div class="qs-port-id">
++                                <span class="qs-port-state" :class="{ 'is-up': device.linkState === 'UP' && device.linkSpeed }"
++                                    aria-hidden="true"></span>
++                                <span>{{ device.name }}</span>
+                             </div>
+-                            <div class="table-cell spacer-col"></div>
+-                            <div class="table-cell name-col">
++                            <span class="qs-port-speed">{{ device.linkSpeed || (device.linkState === 'DOWN' ? $gettext('已断开') : '-') }}</span>
++                        </th>
++                    </tr>
++                </thead>
++                <tbody v-for="kind in (['lan', 'wan'] as const)" :key="kind">
++                    <tr v-for="(item, i) in interfaces[kind]" :key="i">
++                        <th class="qs-fixed" scope="row">
++                            <div class="qs-interface-name">
+                                 <b>{{ item.name }}</b>
++                                <small v-if="item.name !== kind">{{ kind.toUpperCase() }}</small>
+                             </div>
+-                            <div class="table-cell action-col">
+-                                <button class="btn cbi-button cbi-button-apply" :title="$gettext('编辑')"
+-                                    @click="AddInterfaces('wan', i)">
++                            <div class="qs-interface-actions">
++                                <button type="button" class="cbi-button cbi-button-neutral" @click="AddInterfaces(kind, i)">
+                                     {{ $gettext("编辑") }}
+                                 </button>
+-                                <template v-if="i !== 0">
+-                                    <button class="cbi-button cbi-button-remove" @click="DelInterfaces('wan', i)">
+-                                        {{ $gettext("删除") }}
+-                                    </button>
+-                                </template>
++                                <button v-if="i !== 0" type="button" class="cbi-button cbi-button-remove"
++                                    @click="DelInterfaces(kind, i)">{{ $gettext("删除") }}</button>
+                             </div>
+-                        </div>
+-                    </template>
+-
+-                    <!-- 添加WAN按钮行 -->
+-                    <div class="table-row add-row" @click="AddInterfaces('wan')">
+-                        <div class="table-cell device-col" v-for="item in porter.devices" :key="item.name"></div>
+-                        <div class="table-cell spacer-col"></div>
+-                        <div class="table-cell name-col"></div>
+-                        <div class="table-cell action-col">
+-                            <AddSvg class="icon" />
+-                        </div>
+-                    </div>
+-                </div>
+-            </div>
++                        </th>
++                        <td v-for="device in porter.devices" :key="device.name">
++                            <input type="checkbox" :name="device.name" :value="device.name"
++                                :aria-label="item.name + ' / ' + device.name"
++                                v-model="item.deviceNames"
++                                @input="kind === 'lan' ? onCheckboxChange($event, i) : onCheckboxWan($event, i)">
++                        </td>
++                    </tr>
++                    <tr class="qs-add-interface">
++                        <td class="qs-fixed">
++                            <button type="button" class="cbi-button cbi-button-neutral" @click="AddInterfaces(kind)">
++                                <span aria-hidden="true">+</span> {{ kind.toUpperCase() }}
++                            </button>
++                        </td>
++                        <td v-if="porter.devices.length" :colspan="porter.devices.length"></td>
++                    </tr>
++                </tbody>
++            </table>
+         </div>
+         <div class="cbi-page-actions control-group">
+-                <input class="btn cbi-button cbi-button-apply" type="button" :value="$gettext('保存并应用')"
+-                    @click="ClickSave" :disabled="disabled">
+-            </div>
++            <input class="btn cbi-button cbi-button-apply" type="button" :value="$gettext('保存并应用')"
++                @click="ClickSave" :disabled="disabled">
++        </div>
+     </div>
+ </template>
+ 
+ <script setup lang="ts">
+-// 保持原有script部分完全不变
+-import { ref, PropType, reactive } from 'vue';
+-import { useGettext, formatNumber } from '/@/plugins/i18n'
+-const { $gettext, $ngettext } = useGettext()
++import { ref, reactive } from 'vue';
++import { useGettext } from '/@/plugins/i18n'
++const { $gettext } = useGettext()
+ 
+ import request from '/@/request';
+-import itemVue from "/@/components/interfacer/item.vue"
+-import AddSvg from "/@/components/svg/add.vue"
+ import ActionEdit from "/@/components/action-edit"
+ import Toast from '/@/components/toast';
+ const porter = reactive<{
+@@ -291,163 +248,4 @@ const ClickSave = async () => {
+ }
+ </script>
+ 
+-<style lang="scss" scoped>
+-:deep(.app-container_status-label_bg) {
+-    margin: 8px 0;
+-    flex: 0 0 170px;
+-    height: 80px;
+-    justify-content: start;
+-}
+-
+-:deep(.interface-device-flex) {
+-    justify-content: start;
+-}
+-
+-.container {
+-    width: 100%;
+-    overflow-x: auto;
+-    /* 整体横向滚动 */
+-
+-    .table-wrapper {
+-        min-width: 1280px;
+-        /* 最小宽度防止内容过窄 */
+-        width: max-content;
+-        /* 内容宽度撑开 */
+ 
+-        .table-body {
+-            display: flex;
+-            flex-direction: column;
+-            min-width: 100%;
+-        }
+-
+-        .table-header {
+-            display: flex;
+-            // font-weight: bold;
+-            border-bottom: 2px solid #e5e7eb;
+-            background-color: #f8fafc;
+-            padding-left: 10px;
+-        }
+-
+-        .header-cell {}
+-
+-        .table-row {
+-            display: flex;
+-            min-width: 100%;
+-            align-items: center;
+-            border-bottom: 1px solid #e5e7eb;
+-            transition: background-color 0.2s;
+-
+-            &:hover {
+-                background-color: #f3f4f6;
+-            }
+-        }
+-
+-        .add-row {
+-            cursor: pointer;
+-
+-            &:hover {
+-                background-color: #f0f9ff;
+-            }
+-        }
+-
+-        .table-cell {
+-            padding: 12px 16px;
+-            box-sizing: border-box;
+-            display: flex;
+-            justify-content: center;
+-        }
+-
+-        .device-col {
+-            flex: 0 0 200px;
+-            /* 固定设备列宽度 */
+-            min-width: 200px;
+-        }
+-
+-        .spacer-col:first-of-type {
+-            flex: 0 0 10px;
+-            /* 第一个间隔列 */
+-        }
+-
+-        .spacer-col:last-of-type {
+-            flex: 0 0 32px;
+-            /* 第二个间隔列 */
+-        }
+-
+-        .name-col {
+-            flex: 0 0 150px;
+-            /* 接口名称列宽度 */
+-            min-width: 150px;
+-            text-align: left;
+-        }
+-
+-        .action-col {
+-            flex: 0 0 auto;
+-            /* 操作列自适应 */
+-            text-align: right;
+-            min-width: 160px;
+-            /* 操作列最小宽度 */
+-        }
+-
+-        .icon {
+-            width: 48px;
+-            height: 100%;
+-            cursor: pointer;
+-        }
+-
+-        .interface-device-flex {
+-            display: flex;
+-            justify-content: center;
+-            width: 100%;
+-        }
+-    }
+-
+-    .cbi-page-actions {
+-        margin-top: 20px;
+-        display: flex;
+-        justify-content: flex-end;
+-    }
+-
+-    // 移动端适配
+-    @media (max-width: 768px) {
+-        :deep(.app-container_status-label_bg) {
+-            margin: 8px 0;
+-            flex: 0 0 80px;
+-            width: 120px;
+-            height: 80px;
+-            justify-content: start;
+-        }
+-
+-        .table-wrapper {
+-            min-width: 100%;
+-            /* 增大最小宽度适应小屏幕 */
+-        }
+-
+-        .table-cell {
+-            padding: 8px 12px;
+-        }
+-
+-        .device-col {
+-            flex: 0 0 120px !important;
+-            /* 固定设备列宽度 */
+-            min-width: 120px !important;
+-            margin-right: 16px;
+-        }
+-
+-        .name-col {
+-            flex: 0 0 80px !important;
+-            /* 缩小接口名称列宽度 */
+-            min-width: 80px !important;
+-        }
+-
+-        .action-col {
+-            min-width: 120px;
+-            /* 缩小操作列宽度 */
+-        }
+-
+-        .interface-device-flex {
+-            flex-direction: column;
+-            gap: 4px;
+-        }
+-    }
+-}
+-</style>
+\ No newline at end of file
+diff --git a/web/src/pages/network/gateway/index.vue b/web/src/pages/network/gateway/index.vue
+index d664295..6ce28dc 100644
+--- a/web/src/pages/network/gateway/index.vue
++++ b/web/src/pages/network/gateway/index.vue
+@@ -27,8 +27,8 @@
+                 </div>
+                 <div class="label-value">
+                     <select disabled :style="{
+-                        backgroundColor: 'rgba(215, 215, 215, 1)',
+-                        color: '#333'
++                        backgroundColor: 'var(--s3)',
++                        color: 'var(--text-2)'
+                     }">
+                         <option>{{ $gettext("旁路由模式仅支持静态IP地址") }}</option>
+                     </select>
+diff --git a/web/src/pages/network/index/index.vue b/web/src/pages/network/index/index.vue
+index 3685d84..f644d1c 100644
+--- a/web/src/pages/network/index/index.vue
++++ b/web/src/pages/network/index/index.vue
+@@ -1,270 +1,284 @@
+ <template>
+-    <div id="page">
+-        <div class="title">{{ $gettext("欢迎使用网络配置向导") }}</div>
+-        <div class="desc">{{ $gettext("选择一种连接方式以开始") }}</div>
+-        <div class="network-containers">
+-            <div class="network-container_item">
+-                <router-link to="/network/pppoe">
+-                    <div class="cover">
+-                        <div class="thumbnail">
+-                            <DialSvg></DialSvg>
+-                            <span>{{ $gettext("宽带拨号连接") }}</span>
+-                        </div>
+-                    </div>
+-                </router-link>
++    <section class="guide" aria-labelledby="guide-title">
++        <header class="guide-heading">
++            <div class="guide-intro">
++                <h2 id="guide-title">{{ $gettext("欢迎使用网络向导") }}</h2>
++                <p>{{ $gettext("选择一种连接方式开始") }}</p>
+             </div>
+-            <div class="network-container_item">
+-                <router-link to="/network/dhcp">
+-                    <div class="cover">
+-                        <div class="thumbnail">
+-                            <RouterSvg></RouterSvg>
+-                            <span>{{ $gettext("连接现有路由器") }}</span>
+-                        </div>
++            <a class="guide-advanced" href="/cgi-bin/luci/admin/network/network">
++                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
++                    stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
++                    <path d="M4 6h6m4 0h6m-6-2v4M4 12h12m4 0h0m-4-2v4M4 18h2m4 0h10m-14-2v4"/>
++                </svg>
++                {{ $gettext("高级模式") }}
++            </a>
++        </header>
++
++        <ul class="guide-options">
++            <li v-for="mode in modes" :key="mode.key" :data-mode="mode.key">
++                <router-link class="guide-option" :to="'/network/' + mode.key">
++                    <div class="guide-visual" aria-hidden="true">
++                        <svg viewBox="0 0 192 88" fill="none" stroke="currentColor" stroke-width="1.65"
++                            stroke-linecap="round" stroke-linejoin="round">
++                            <template v-if="mode.key === 'pppoe'">
++                                <path class="guide-wire" d="M60 40h26a7 7 0 0 1 7 7v5a7 7 0 0 0 7 7h27"/>
++                                <rect class="guide-device" x="30" y="27" width="30" height="26" rx="5"/>
++                                <path d="M37 36h16v9h-4v3h-8v-3h-4zm5 0v4m6-4v4"/>
++                                <rect class="guide-device" x="127" y="49" width="35" height="20" rx="5"/>
++                                <path d="M135 59h1m6 0h1m7 0h4M142 49V34"/>
++                            </template>
++                            <template v-else-if="mode.key === 'dhcp'">
++                                <path class="guide-wire" d="M71 53h50"/>
++                                <rect class="guide-device" x="30" y="44" width="41" height="18" rx="5"/>
++                                <rect class="guide-device" x="121" y="44" width="41" height="18" rx="5"/>
++                                <path d="M38 53h1m6 0h1m9 0h8M38 44V29m25 15V29m66 24h1m6 0h1m9 0h8m-25-9V29m25 15V29"/>
++                                <path d="m93 49 5 4-5 4"/>
++                            </template>
++                            <template v-else>
++                                <path class="guide-wire" d="M96 35v13m0 0H54a5 5 0 0 0-5 5v8m47-13h42a5 5 0 0 1 5 5v8"/>
++                                <rect class="guide-device" x="77" y="16" width="38" height="19" rx="5"/>
++                                <rect class="guide-device" x="34" y="61" width="30" height="13" rx="4"/>
++                                <rect class="guide-device" x="128" y="61" width="30" height="13" rx="4"/>
++                                <path d="M85 25h1m5 0h1m6 0h9M42 67h1m7 0h6m80 0h1m7 0h6"/>
++                            </template>
++                        </svg>
+                     </div>
+-                </router-link>
+-            </div>
+-            <div class="network-container_item">
+-                <router-link to="/network/gateway">
+-                    <div class="cover">
+-                        <div class="thumbnail">
+-                            <SiderouterSvg></SiderouterSvg>
+-                            <span>{{ $gettext("配置为旁路由") }}</span>
+-                        </div>
++                    <div class="guide-option-body">
++                        <span class="guide-description">
++                            <span class="guide-label">{{ mode.label }}</span>
++                            <span class="guide-protocol">{{ mode.protocol }}</span>
++                        </span>
++                        <svg class="guide-arrow" viewBox="0 0 24 24" width="20" height="20" fill="none"
++                            stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
++                            aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg>
+                     </div>
+                 </router-link>
+-            </div>
+-        </div>
+-        <div class="info" v-html="advTips">
+-        </div>
+-    </div>
++            </li>
++        </ul>
++    </section>
+ </template>
+-<script setup lang="ts">
+-import { useGettext,formatNumber } from '/@/plugins/i18n'
+-const { $gettext,$ngettext } = useGettext()
+ 
+-import RouterSvg from "/@/components/svg/router.vue"
+-import DialSvg from "/@/components/svg/dial.vue"
+-import SiderouterSvg from "/@/components/svg/siderouter.vue"
++<script setup lang="ts">
++import { useGettext } from "/@/plugins/i18n"
+ 
+-const advTips = $gettext("没找到想要的配置？请使用%{link}", {link:'<a href="/cgi-bin/luci/admin/network/network">'+$gettext("高级模式")+'</a>'}, true)
++const { $gettext, current } = useGettext()
++const modes = [
++    { key: "pppoe", label: $gettext("宽带拨号连接"), protocol: "PPPoE" },
++    { key: "dhcp", label: $gettext("连接现有路由器"), protocol: current.startsWith("zh") ? "DHCP / 静态 IP" : "DHCP / Static IP" },
++    { key: "gateway", label: $gettext("配置为旁路由"), protocol: "LAN" },
++]
+ </script>
+-<style lang="scss" scoped>
+-#page {
++
++<style scoped>
++.guide {
+     width: 100%;
+-    padding: 1rem;
+-    margin: 0 auto;
++    max-width: 996px;
++    margin: 48px auto 0;
++}
++
++.guide-heading {
+     display: flex;
+     flex-wrap: wrap;
+-    justify-content: flex-start;
+     align-items: center;
+-    align-content: center;
+-    max-width: 800px;
+-    height: 100vh;
+-    overflow: overlay;
+-
+-    .title {
+-        width: 100%;
+-        display: block;
+-        text-align: center;
+-        font-size: 32px;
+-        font-family: PingFangSC-Semibold, PingFang SC;
+-        font-weight: 600;
+-        color: rgba(0, 0, 0, 0.8);
+-        line-height: 45px;
++    justify-content: space-between;
++    gap: 12px;
++    margin: 0 0 20px;
++}
++
++.guide-intro {
++    min-width: 0;
++}
++
++.guide-heading h2 {
++    margin: 0;
++    padding: 0;
++    background: none;
++    box-shadow: none;
++    color: var(--text);
++    font-size: 28px;
++    font-weight: 650;
++    line-height: 1.25;
++    letter-spacing: 0;
++}
++
++.guide-intro p {
++    margin: 6px 0 0;
++    color: var(--text-2);
++    line-height: 1.5;
++}
++
++.guide-advanced {
++    display: inline-flex;
++    align-items: center;
++    gap: 7px;
++    min-height: var(--ctl-h, 36px);
++    padding: 0 11px;
++    border: 1px solid var(--line-2);
++    border-radius: var(--r, 6px);
++    background: var(--s1);
++    color: var(--text-2);
++    white-space: nowrap;
++}
+ 
++.guide-advanced:hover {
++    background: var(--s2);
++    color: var(--text);
++    text-decoration: none;
++}
++
++.guide-options {
++    display: grid;
++    grid-template-columns: repeat(3, minmax(0, 1fr));
++    gap: 16px;
++    margin: 0;
++    padding: 0;
++    list-style: none;
++}
++
++.guide-options > li {
++    --guide-tone: var(--accent-text);
++    list-style: none;
++    margin: 0;
++    min-width: 0;
++}
++
++.guide-options > [data-mode="dhcp"] {
++    --guide-tone: var(--ok-text);
++}
++
++.guide-options > [data-mode="gateway"] {
++    --guide-tone: var(--info-text);
++}
++
++.guide-options .guide-option {
++    display: grid;
++    grid-template-rows: 116px 1fr;
++    align-items: stretch;
++    height: 100%;
++    min-height: 218px;
++    padding: 12px;
++    border: 1px solid var(--line-2);
++    border-radius: var(--r-lg, 8px);
++    background: var(--s1);
++    color: var(--text);
++    text-decoration: none;
++}
++
++.guide-options .guide-option:hover {
++    border-color: var(--guide-tone);
++    background: var(--s2);
++    color: var(--text);
++    text-decoration: none;
++}
++
++.guide-options .guide-option:focus-visible,
++.guide-advanced:focus-visible {
++    outline: 2px solid var(--focus);
++    outline-offset: 2px;
++}
++
++.guide-visual {
++    display: grid;
++    place-items: center;
++    overflow: hidden;
++    background: color-mix(in srgb, var(--guide-tone) 8%, var(--s2));
++    border: 1px solid color-mix(in srgb, var(--guide-tone) 15%, var(--line));
++    border-radius: var(--r, 6px);
++    color: var(--guide-tone);
++}
++
++.guide-visual svg {
++    display: block;
++    width: min(100%, 208px);
++    height: 100%;
++    max-height: 99px;
++}
++
++.guide-device {
++    fill: var(--s2);
++}
++
++.guide-wire {
++    stroke-dasharray: 3 4;
++}
++
++.guide-option-body {
++    display: flex;
++    align-items: center;
++    justify-content: space-between;
++    gap: 8px;
++    padding: 14px 6px 4px;
++    min-width: 0;
++}
++
++.guide-description {
++    display: flex;
++    flex-direction: column;
++    gap: 5px;
++    min-width: 0;
++}
++
++.guide-label {
++    color: inherit;
++    font-size: 17px;
++    font-weight: 600;
++    line-height: 1.4;
++    overflow-wrap: anywhere;
++    letter-spacing: 0;
++}
++
++.guide-protocol {
++    color: var(--text-2);
++    font-family: var(--mono, monospace);
++    font-size: var(--fs-sm, 12px);
++    line-height: 1.4;
++    overflow-wrap: anywhere;
++}
++
++.guide-arrow {
++    flex: 0 0 20px;
++    color: var(--text-3);
++}
++
++.guide-option:hover .guide-arrow {
++    color: var(--guide-tone);
++}
++
++@media (max-width: 720px) {
++    .guide {
++        margin-top: 12px;
++    }
++
++    .guide-heading h2 {
++        font-size: var(--fs-xl, 20px);
++    }
++
++    .guide-options {
++        grid-template-columns: minmax(0, 1fr);
++        gap: 10px;
+     }
+ 
+-    .desc {
+-        width: 100%;
+-        display: block;
+-        font-size: 24px;
+-        font-family: PingFangSC-Semibold, PingFang SC;
+-        font-weight: 600;
+-        color: rgba(0, 0, 0, 0.6);
+-        line-height: 33px;
+-        text-align: center;
+-        margin-top: 10px;
++    .guide-options .guide-option {
++        grid-template-columns: 104px minmax(0, 1fr);
++        grid-template-rows: auto;
++        gap: 12px;
++        min-height: 90px;
++        padding: 8px;
+     }
+ 
+-    div.info {
+-        width: 100%;
+-        display: block;
+-        font-size: 1.6em;
+-        font-size: 16px;
+-        margin-left: 34px;
++    .guide-option-body {
++        padding: 0 4px 0 0;
+     }
+ 
+-    .network-containers {
+-        width: 100%;
+-        display: flex;
+-        flex-wrap: wrap;
+-        align-items: center;
+-        align-content: center;
+-        justify-content: center;
+-        margin: 3rem 0 1rem 0;
+-
+-        .network-container_item {
+-            flex: 0 0 100%;
+-            // max-width: 33.333%;
+-            position: relative;
+-            border-radius: 4px;
+-            padding: 10px;
+-            cursor: pointer;
+-            max-width: 240px;
+-            width: 240px;
+-            height: 308px;
+-
+-            a {
+-                position: relative;
+-                display: block;
+-                width: 100%;
+-
+-                // &:hover {
+-                //     transform: scale(1.05);
+-                //     transition: 0.4s;
+-                //     position: relative;
+-
+-                //     .cover {
+-                //         .thumbnail {
+-                //             box-shadow: 0px 6px 40px 0px #1c67f2;
+-                //         }
+-                //     }
+-                // }
+-
+-                .cover {
+-                    position: relative;
+-                    padding-top: 130%;
+-                    z-index: 1;
+-
+-                    .thumbnail {
+-                        position: absolute;
+-                        top: 0;
+-                        left: 0;
+-                        width: 100%;
+-                        height: 100%;
+-                        object-fit: contain;
+-                        border-radius: 8px;
+-                        overflow: hidden;
+-                        z-index: 1;
+-                        display: flex;
+-                        flex-wrap: wrap;
+-                        align-items: center;
+-                        align-content: center;
+-                        justify-content: center;
+-                        background-color: #2dc8fd;
+-
+-                        i {
+-                            display: block;
+-                            font-size: 100px;
+-                            color: #eee;
+-                        }
+-
+-                        span {
+-                            display: block;
+-                            text-align: center;
+-                            width: 100%;
+-                            color: #eeee;
+-                            font-size: 2em;
+-                            line-height: 1.5;
+-                            font-size: 22px;
+-                            font-family: PingFangSC-Semibold, PingFang SC;
+-                            color: #FFFFFF;
+-                            line-height: 40px;
+-                        }
+-                    }
+-                }
+-            }
+-        }
+-
+-        .network-container_item {
+-            &:nth-child(9n + 1) {
+-                a {
+-                    .cover {
+-                        .thumbnail {
+-                            background: linear-gradient(138deg, #FF6E6B 0%, #FF6966 100%);
+-                        }
+-                    }
+-                }
+-            }
+-
+-            &:nth-child(9n + 2) {
+-                a {
+-                    .cover {
+-                        .thumbnail {
+-                            background: linear-gradient(145deg, #37D5A9 0%, #42D8B0 100%);
+-                        }
+-                    }
+-                }
+-            }
+-
+-            &:nth-child(9n + 3) {
+-                a {
+-                    .cover {
+-                        .thumbnail {
+-                            background: linear-gradient(145deg, #549AFF 0%, #2C82FF 100%);
+-                        }
+-                    }
+-                }
+-            }
+-
+-            &:nth-child(9n + 4) {
+-                a {
+-                    .cover {
+-                        .thumbnail {
+-                            background-color: #9b58de;
+-                        }
+-                    }
+-                }
+-            }
+-
+-            &:nth-child(9n + 5) {
+-                a {
+-                    .cover {
+-                        .thumbnail {
+-                            background-color: #297ff3;
+-                        }
+-                    }
+-                }
+-            }
+-
+-            &:nth-child(9n + 6) {
+-                a {
+-                    .cover {
+-                        .thumbnail {
+-                            background-color: #27aa8f;
+-                        }
+-                    }
+-                }
+-            }
+-
+-            &:nth-child(9n + 7) {
+-                a {
+-                    .cover {
+-                        .thumbnail {
+-                            background-color: #f15a4a;
+-                        }
+-                    }
+-                }
+-            }
+-
+-            &:nth-child(9n + 8) {
+-                a {
+-                    .cover {
+-                        .thumbnail {
+-                            background-color: #439c07;
+-                        }
+-                    }
+-                }
+-            }
+-
+-            &:nth-child(9n + 9) {}
+-
+-            &:nth-child(9n + 10) {}
+-        }
++    .guide-label {
++        font-size: var(--fs-base, 13px);
+     }
+ }
+-</style>
+ 
+-<style lang="scss" scoped>
+-@media screen and (max-width: 992px) {}
++@media (max-width: 360px) {
++    .guide-options .guide-option {
++        grid-template-columns: 80px minmax(0, 1fr);
++        gap: 8px;
++    }
++}
+-</style>
+\ No newline at end of file
++</style>
+diff --git a/web/src/plugins/i18n/index.ts b/web/src/plugins/i18n/index.ts
+index 9b0d0c5..a78db7f 100644
+--- a/web/src/plugins/i18n/index.ts
++++ b/web/src/plugins/i18n/index.ts
+@@ -10,7 +10,7 @@ const config: {language: Language|undefined, numberFormat:Intl.NumberFormat } =
+ export const createI18n = async (app: App) => {
+     const language = window.vue_lang || (navigator.language.toLowerCase().startsWith("zh") ? "zh-cn" : "en")
+     let translation = {};
+-    const translationUrl = window.vue_lang_data || (language === "zh-cn" ? "" : `/luci-static/quickstart/i18n/${language}.json`)
++    const translationUrl = window.vue_lang_data || (language === "zh-cn" ? "" : `/luci-static/quickstart-network/i18n/${language}.json`)
+     if (translationUrl) {
+         try {
+             const res = await axios({
+diff --git a/web/src/request/request.ts b/web/src/request/request.ts
+index 638c60c..62844a8 100644
+--- a/web/src/request/request.ts
++++ b/web/src/request/request.ts
+@@ -9,13 +9,17 @@ declare interface ResponseData<T = any> {
+   detail?: string;
+   result?: T;
+ }
+-const baseURL = "/cgi-bin/luci/istore";
++const baseURL = "/cgi-bin/luci/admin/quickstart_network_api";
+ const baseURL1 = "/cgi-bin/luci/admin";
+ let reloading = false;
+ const Request = <T>(url: string, data: RequestInit) => {
+   if (!["GET", "HEAD", "OPTIONS"].includes((data.method || "GET").toUpperCase())) {
+     const headers = new Headers(data.headers);
+     if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
++    if (window.token) {
++      const query = new URLSearchParams({ token: window.token });
++      url += (url.includes("?") ? "&" : "?") + query;
++    }
+     data = { ...data, headers };
+   }
+   if (url.indexOf("//") == -1) url = `${baseURL}${url}`;
+diff --git a/web/vite.config.ts b/web/vite.config.ts
+index ecc6b2b..bc713fd 100644
+--- a/web/vite.config.ts
++++ b/web/vite.config.ts
+@@ -1,4 +1,3 @@
+-import {cardRuntimePlugin} from './cardRuntimePlugin'
+ import { defineConfig } from 'vite'
+ import vue from '@vitejs/plugin-vue'
+ import path from "path";
+@@ -19,6 +18,7 @@ function rename() {
+ // https://vitejs.dev/config/
+ export default defineConfig({
+ 	base: "/",
++	publicDir: false,
+ 	server: {
+ 		host: "0.0.0.0",
+ 		port: 8301,
+@@ -42,7 +42,7 @@ export default defineConfig({
+ 		],
+ 	},
+ 	plugins: [
+-		cardRuntimePlugin(),vue(),
++		vue(),
+ 	],
+ 	css: {
+ 		preprocessorOptions: {
+@@ -69,9 +69,9 @@ export default defineConfig({
+ 				// its own ?v to index.js; a reverse import with Rollup’s different ?v would
+ 				// execute the app a second time. Keep shared app code in its own chunk.
+ 				manualChunks: (id) => id.includes('/node_modules/') ? 'vendor' : id.includes('/src/')&&!id.endsWith('/src/main.ts')&&!id.endsWith('/cards/installClient.ts')&&!id.includes('/cards/FastnetInstallDialog.vue') ? 'app' : undefined,
+-				entryFileNames: `luci-static/quickstart/[name].js`,
+-				chunkFileNames: `luci-static/quickstart/[name].js?v=[hash]`,
+-				assetFileNames: `luci-static/quickstart/[name].[ext]`
++				entryFileNames: `luci-static/quickstart-network/[name].js`,
++				chunkFileNames: `luci-static/quickstart-network/[name].js?v=[hash]`,
++				assetFileNames: `luci-static/quickstart-network/[name].[ext]`
+ 			},
+ 			plugins: [rename()],
+ 			external: [
+diff --git a/web/src/plugins/router/network-only.ts b/web/src/plugins/router/network-only.ts
+new file mode 100644
+index 0000000..0190888
+--- /dev/null
++++ b/web/src/plugins/router/network-only.ts
+@@ -0,0 +1,22 @@
++import { createRouter, createWebHistory } from "vue-router"
++import NetworkPage from "/@/pages/network/index.vue"
++import NetworkHome from "/@/pages/network/index/index.vue"
++import Pppoe from "/@/pages/network/pppoe/index.vue"
++import Dhcp from "/@/pages/network/dhcp/index.vue"
++import Gateway from "/@/pages/network/gateway/index.vue"
++import InterfaceConfig from "/@/pages/interfaceconfig/index.vue"
++
++const guide = window.vue_base.endsWith("/pages/")
++export const router = createRouter({
++    history: createWebHistory(window.vue_base),
++    routes: guide ? [{ path: "/", redirect: "/network" }, {
++        path: "/network",
++        component: NetworkPage,
++        children: [
++            { path: "", component: NetworkHome },
++            { path: "pppoe", component: Pppoe },
++            { path: "dhcp", component: Dhcp },
++            { path: "gateway", component: Gateway },
++        ],
++    }] : [{ path: "/interfaceconfig", component: InterfaceConfig }],
++})
+diff --git a/web/src/style/network-vantage.css b/web/src/style/network-vantage.css
+new file mode 100644
+index 0000000..230faf6
+--- /dev/null
++++ b/web/src/style/network-vantage.css
+@@ -0,0 +1,171 @@
++.qs-network #app #page :is(.title, .desc) {
++    background: transparent;
++    box-shadow: none;
++}
++
++.qs-network #app #page .title {
++    color: var(--text);
++}
++
++.qs-network #app #page :is(.desc, .info, .network-message li) {
++    color: var(--text-2);
++}
++
++.qs-network #app #page a {
++    color: var(--accent-text);
++}
++
++.qs-network #app #page :is(.msgs, .msg, .network-message li span) {
++    color: var(--err-text);
++}
++
++.qs-network #app #page code {
++    background: var(--s2);
++    color: var(--text-2);
++}
++
++.qs-network .qs-ports-title {
++    margin: 0 0 12px;
++    background: transparent;
++    box-shadow: none;
++    color: var(--text);
++}
++
++.qs-ports-scroll {
++    max-width: 100%;
++    overflow-x: auto;
++    border: 1px solid var(--line-2);
++    border-radius: var(--r-lg, 8px);
++    background: var(--s1);
++}
++
++.qs-network .qs-port-matrix {
++    --qs-interface-width: 135px;
++    --qs-port-min: 88px;
++    margin: 0;
++    width: 100%;
++    min-width: calc(var(--qs-interface-width) + var(--qs-port-count) * var(--qs-port-min));
++    table-layout: fixed;
++    border-collapse: separate;
++    border-spacing: 0;
++    color: var(--text);
++    background: var(--s1);
++}
++
++.qs-network .qs-port-matrix :is(th, td) {
++    padding: 7px 6px;
++    text-align: center;
++    vertical-align: middle;
++    border-bottom: 1px solid var(--line);
++}
++
++.qs-network .qs-port-matrix thead th {
++    height: 58px;
++    background: var(--s2);
++    font-weight: 600;
++}
++
++.qs-network .qs-port-matrix .qs-fixed {
++    position: sticky;
++    left: 0;
++    z-index: 1;
++    width: var(--qs-interface-width);
++    padding-inline: 10px;
++    text-align: left;
++    background: var(--s1);
++    border-right: 1px solid var(--line);
++}
++
++.qs-network .qs-port-matrix thead .qs-fixed {
++    background: var(--s2);
++}
++
++.qs-port-id,
++.qs-interface-name {
++    display: flex;
++    align-items: center;
++    flex-wrap: wrap;
++    gap: 3px 6px;
++    overflow-wrap: anywhere;
++}
++
++.qs-port-id {
++    justify-content: center;
++    font-size: var(--fs-base, 13px);
++}
++
++.qs-port-state {
++    width: 6px;
++    height: 6px;
++    flex: 0 0 6px;
++    border-radius: 50%;
++    background: var(--line-2);
++}
++
++.qs-port-state.is-up {
++    background: var(--ok);
++}
++
++.qs-port-speed,
++.qs-interface-name small {
++    color: var(--text-2);
++    font-size: var(--fs-micro, 11px);
++    font-weight: 500;
++    overflow-wrap: anywhere;
++}
++
++.qs-interface-name small {
++    font-family: var(--mono);
++}
++
++.qs-interface-actions {
++    display: flex;
++    gap: 4px;
++    margin-top: 4px;
++}
++
++.qs-network .qs-port-matrix :is(.qs-interface-actions, .qs-add-interface) button.cbi-button {
++    min-height: 26px;
++    height: auto;
++    margin: 0;
++    padding: 2px 7px;
++    font-size: var(--fs-sm, 12px);
++    white-space: nowrap;
++}
++
++.qs-network .qs-port-matrix tbody tr:hover td,
++.qs-network .qs-port-matrix tbody tr:hover th,
++.qs-network .qs-port-matrix tbody .qs-add-interface > td {
++    background: var(--s2);
++}
++
++.qs-network .qs-port-matrix tbody:last-child tr:last-child > td {
++    border-bottom: none;
++}
++
++@media (max-width: 600px) {
++    .qs-network .qs-port-matrix {
++        --qs-interface-width: 108px;
++        --qs-port-min: 76px;
++    }
++    .qs-network .qs-port-matrix .qs-fixed {
++        padding-inline: 7px;
++    }
++}
++
++.qs-network #actioner .actioner-dns {
++    color: var(--text);
++    background: var(--s2);
++}
++
++.qs-network #actioner :is(.actioner-dns_header, .actioner-dns_footer) {
++    border-color: var(--line);
++}
++
++.qs-network #actioner .label-item_key {
++    color: var(--text-2);
++}
++
++.qs-network #actioner .label-message {
++    color: var(--err-text);
++}
