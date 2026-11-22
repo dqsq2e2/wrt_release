@@ -576,6 +576,7 @@ install_custom_feed() {
         luci-app-emmc-health luci-app-airoha-npu luci-app-wolultra luci-app-mini-diskmanager
         axonhub luci-app-axonhub gecoosac luci-app-gecoosac sing-box
         luci-app-tingreader luci-app-velo5x0-fan luci-app-ztc1control
+        luci-app-device-gateway
         luci-app-store taskd luci-lib-taskd luci-lib-xterm
     )
     local custom_feed_sources=()
@@ -782,6 +783,13 @@ install_custom_feed() {
     if ! sync_repo_root_package_to_feed_dir \
         "https://github.com/dqsq2e2/luci-app-velo5x0-fan.git" "main" \
         "$custom_feed_dir" "dqsq2e2/luci-app-velo5x0-fan" "luci-app-velo5x0-fan"; then
+        rm -rf "$custom_feed_dir"
+        return 1
+    fi
+
+    if ! sync_repo_root_package_to_feed_dir \
+        "https://github.com/huladabang/luci-app-device-gateway.git" "main" \
+        "$custom_feed_dir" "huladabang/luci-app-device-gateway" "luci-app-device-gateway"; then
         rm -rf "$custom_feed_dir"
         return 1
     fi

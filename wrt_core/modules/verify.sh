@@ -65,6 +65,7 @@ verify_custom_feed_installed_paths() {
         luci-app-wolultra luci-app-mini-diskmanager luci-app-homeproxy sing-box
         axonhub luci-app-axonhub gecoosac luci-app-gecoosac
         luci-app-tingreader luci-app-upnp miniupnpd
+        luci-app-device-gateway
         luci-app-store taskd luci-lib-taskd luci-lib-xterm
     )
     local missing_package_dirs=()
