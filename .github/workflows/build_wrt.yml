@@ -90,7 +90,7 @@ jobs:
 
       - name: Install BQ3588C image build tools
         if: inputs.model == 'bq3588c_immwrt'
-        run: sudo apt-get install -y gcc-aarch64-linux-gnu gdisk libgnutls28-dev libssl-dev python3-dev python3-pyelftools python3-setuptools swig
+        run: sudo apt-get install -y e2fsprogs gcc-aarch64-linux-gnu gdisk libgnutls28-dev libssl-dev python3-dev python3-pyelftools python3-setuptools swig
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
