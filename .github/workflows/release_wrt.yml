@@ -12,6 +12,7 @@ on:
         options:
           - aliyun_ap8220_immwrt
           - aliyun_ap8220_libwrt
+          - bq3588c_immwrt
           - cmcc_rax3000m_immwrt
           - S20L-WIFI-YES
           - S20P-WIFI-YES
@@ -116,6 +117,10 @@ jobs:
 
       - name: Build System Setup
         run: sudo bash wrt_core/setup_ci_environment.sh
+
+      - name: Install BQ3588C image build tools
+        if: inputs.model == 'bq3588c_immwrt'
+        run: sudo apt-get install -y gdisk libgnutls28-dev libssl-dev python3-dev python3-pyelftools python3-setuptools swig
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -283,7 +288,19 @@ jobs:
           WHOAMI: ZqinKing
 
       - name: Prepare Release Body
+        env:
+          MODEL: ${{ inputs.model }}
         run: |
+          if [[ "$MODEL" == "bq3588c_immwrt" ]]; then
+            cat > release_body.txt <<'EOF'
+          Bearkey BQ3588C ImmortalWrt
+
+          `ext4-combined.img.gz` 是内含 RKdev 主线 U-Boot 的整盘镜像。可解压后写入整盘，也可在 RKdev 恢复系统中选中同一个镜像刷入 eMMC 系统区。
+
+          物理网口和板载 Wi-Fi 属于 LAN，FM650-CN 的 USB NCM 接口为 WAN。
+          EOF
+            exit 0
+          fi
           echo "云编译发布" > release_body.txt
           echo "源码：${{ env.BUILD_SRC }}" >> release_body.txt
           echo "Kernel: ${{ env.KVER }}" >> release_body.txt
@@ -326,6 +343,15 @@ jobs:
           files: ./release_files/*
           fail_on_unmatched_files: true
           body_path: ./release_body.txt
+
+      - name: Prune Older BQ3588C Releases
+        if: inputs.model == 'bq3588c_immwrt'
+        env:
+          CURRENT_TAG: ${{ env.BUILD_DATE }}_bq3588c_immwrt
+        run: |
+          gh release list --limit 100 --exclude-drafts --json tagName | \
+            jq -r --arg current "$CURRENT_TAG" '.[] | .tagName | select(endswith("_bq3588c_immwrt") and . != $current)' | \
+            while IFS= read -r tag; do gh release delete "$tag" --cleanup-tag --yes; done
 
       - name: Prune Old Monitored Releases
         if: ${{ contains(fromJSON('["MEDIATEK-WIFI-YES","MEDIATEK-WIFI-NO","S20L-WIFI-YES","S20P-WIFI-YES","S20-WIFI-NO","jdcloud_ax6000_immwrt","jdcloud_ax6000_immwrt_honk"]'), inputs.model) }}

@@ -12,6 +12,7 @@ on:
         options:
           - aliyun_ap8220_immwrt
           - aliyun_ap8220_libwrt
+          - bq3588c_immwrt
           - cmcc_rax3000m_immwrt
           - S20L-WIFI-YES
           - S20P-WIFI-YES
@@ -86,6 +87,10 @@ jobs:
 
       - name: Build System Setup
         run: sudo bash wrt_core/setup_ci_environment.sh
+
+      - name: Install BQ3588C image build tools
+        if: inputs.model == 'bq3588c_immwrt'
+        run: sudo apt-get install -y gdisk libgnutls28-dev libssl-dev python3-dev python3-pyelftools python3-setuptools swig
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

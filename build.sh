@@ -602,9 +602,22 @@ remove_uhttpd_dependency
 
 cd "$BASE_PATH/../$BUILD_DIR"
 source "$BASE_PATH/modules/verify.sh"
-verify_expected_kernel_version "$EXPECTED_KERNEL" "target/linux/mediatek/Makefile"
+target_makefile="target/linux/mediatek/Makefile"
+if [[ $Dev == bq3588c_immwrt ]]; then
+    target_makefile="target/linux/rockchip/Makefile"
+    command -v sgdisk >/dev/null || { echo "BQ3588C image creation requires sgdisk (gdisk)." >&2; exit 1; }
+fi
+verify_expected_kernel_version "$EXPECTED_KERNEL" "$target_makefile"
 make defconfig
 verify_apk_config
+if [[ $Dev == bq3588c_immwrt ]]; then
+    for option in TARGET_rockchip_armv8_DEVICE_bearkey_bq3588c TARGET_ROOTFS_EXT4FS \
+            PACKAGE_kmod-brcmfmac PACKAGE_brcmfmac-firmware-43752-sdio PACKAGE_brcmfmac-nvram-43752-sdio \
+            PACKAGE_kmod-usb-net-cdc-ncm PACKAGE_kmod-usb-serial-option PACKAGE_comgt-ncm \
+            PACKAGE_luci-proto-ncm PACKAGE_wpad-openssl; do
+        grep -qx "CONFIG_$option=y" .config || { echo "Missing BQ3588C config: $option" >&2; exit 1; }
+    done
+fi
 verify_daed_config .config "$DAED_PACKAGES_ENABLED"
 verify_honk_config .config "$HONK_PACKAGES_ENABLED"
 verify_luci_stack_config .config "$LUCI_STACK"
@@ -641,6 +654,20 @@ if [[ ${GITHUB_ACTIONS:-} == "true" ]]; then
 fi
 find "$TARGET_DIR" -type f \( -name "*.bin" -o -name "*.manifest" -o -name "*efi.img.gz" -o -name "*combined.img.gz" -o -name "*.itb" -o -name "*.fip" -o -name "*.ubi" -o -name "*rootfs.tar.gz" \) -exec "$firmware_collect_command" -f {} "$FIRMWARE_DIR/" \;
 \rm -f "$BASE_PATH/../firmware/Packages.manifest" 2>/dev/null
+if [[ $Dev == bq3588c_immwrt ]]; then
+    (
+        cd "$FIRMWARE_DIR"
+        shopt -s nullglob
+        images=(*bearkey_bq3588c-ext4-combined.img.gz)
+        manifests=(*bearkey_bq3588c*.manifest)
+        (( ${#images[@]} == 1 && ${#manifests[@]} == 1 )) || {
+            echo "Expected one BQ3588C combined image and its package manifest." >&2
+            exit 1
+        }
+        gzip -t "${images[0]}"
+        sha256sum "${images[0]}" "${manifests[0]}" > SHA256SUMS
+    )
+fi
 
 if [[ -d action_build ]]; then
     make clean
