@@ -120,6 +120,7 @@ stage_pre_install_source_fixes() {
     update_homeproxy
     fix_default_set
     update_golang
+    restrict_x64_node_host_binary
     change_dnsmasq2full
     fix_mk_def_depends
 

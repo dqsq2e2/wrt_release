@@ -24,6 +24,15 @@ update_golang() {
 }
 
 
+restrict_x64_node_host_binary() {
+    local recipe=./feeds/packages/lang/node/node/Makefile
+    # This recipe only provides an x86-64 archive. Other hosts build from source.
+    if [[ -f $recipe ]] && grep -qxF 'NODEJS_BIN:=node-v$(PKG_VERSION)-linux-x64.tar.gz' "$recipe"; then
+        sed -i 's/^ifeq (\$(CONFIG_NODEJS_HOST_BIN),y)$/ifeq ($(CONFIG_NODEJS_HOST_BIN):$(HOST_ARCH),y:x86_64)/' "$recipe"
+    fi
+}
+
+
 check_default_settings() {
     local settings_dir="$BUILD_DIR/package/emortal/default-settings"
     if [ -z "$(find "$BUILD_DIR/package" -type d -name "default-settings" -print -quit 2>/dev/null)" ]; then
