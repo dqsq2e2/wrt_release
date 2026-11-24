@@ -606,6 +606,12 @@ target_makefile="target/linux/mediatek/Makefile"
 if [[ $Dev == bq3588c_immwrt ]]; then
     target_makefile="target/linux/rockchip/Makefile"
     command -v sgdisk >/dev/null || { echo "BQ3588C image creation requires sgdisk (gdisk)." >&2; exit 1; }
+    (
+        loader_check=$(mktemp -d) || exit 1
+        trap 'rm -rf -- "$loader_check"' EXIT
+        sh target/linux/rockchip/image/bq3588c-loader.sh "$loader_check"
+    ) || { echo "BQ3588C RKdev loader validation failed." >&2; exit 1; }
+    echo "BQ3588C RKdev loader and layout validated."
 fi
 verify_expected_kernel_version "$EXPECTED_KERNEL" "$target_makefile"
 make defconfig
