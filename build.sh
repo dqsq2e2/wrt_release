@@ -618,7 +618,8 @@ if [[ $Dev == bq3588c_immwrt ]]; then
     for option in TARGET_rockchip_armv8_DEVICE_bearkey_bq3588c TARGET_ROOTFS_EXT4FS \
             PACKAGE_kmod-brcmfmac PACKAGE_brcmfmac-firmware-43752-sdio PACKAGE_brcmfmac-nvram-43752-sdio \
             PACKAGE_kmod-usb-net-cdc-ncm PACKAGE_kmod-usb-serial-option PACKAGE_comgt-ncm \
-            PACKAGE_luci-proto-ncm PACKAGE_wpad-openssl \
+            PACKAGE_luci-proto-ncm PACKAGE_modemmanager PACKAGE_luci-proto-modemmanager \
+            PACKAGE_wpad-openssl \
             PACKAGE_kmod-drm-panfrost PACKAGE_kmod-drm-rockchip; do
         grep -qx "CONFIG_$option=y" .config || { echo "Missing BQ3588C config: $option" >&2; exit 1; }
     done
@@ -670,7 +671,8 @@ if [[ $Dev == bq3588c_immwrt ]]; then
             exit 1
         }
         gzip -t "${images[0]}"
-        for package in kmod-drm-panfrost kmod-drm-rockchip; do
+        for package in kmod-drm-panfrost kmod-drm-rockchip luci-proto-ncm \
+                modemmanager luci-proto-modemmanager; do
             grep -q "^$package " "${manifests[0]}" || {
                 echo "Missing BQ3588C firmware package: $package" >&2
                 exit 1
