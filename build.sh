@@ -606,12 +606,10 @@ target_makefile="target/linux/mediatek/Makefile"
 if [[ $Dev == bq3588c_immwrt ]]; then
     target_makefile="target/linux/rockchip/Makefile"
     command -v sgdisk >/dev/null || { echo "BQ3588C image creation requires sgdisk (gdisk)." >&2; exit 1; }
-    (
-        loader_check=$(mktemp -d) || exit 1
-        trap 'rm -rf -- "$loader_check"' EXIT
-        sh target/linux/rockchip/image/bq3588c-loader.sh "$loader_check"
-    ) || { echo "BQ3588C RKdev loader validation failed." >&2; exit 1; }
-    echo "BQ3588C RKdev loader and layout validated."
+    BQ3588C_RKDEV_BUNDLE=$(mktemp -d)
+    export BQ3588C_RKDEV_BUNDLE
+    trap 'rm -rf -- "$BQ3588C_RKDEV_BUNDLE"' EXIT
+    python3 target/linux/rockchip/image/bq3588c_loader.py "$BQ3588C_RKDEV_BUNDLE"
 fi
 verify_expected_kernel_version "$EXPECTED_KERNEL" "$target_makefile"
 make defconfig
@@ -678,7 +676,8 @@ if [[ $Dev == bq3588c_immwrt ]]; then
                 exit 1
             }
         done
-        sha256sum "${images[0]}" "${manifests[0]}" > SHA256SUMS
+        cp "$BQ3588C_RKDEV_BUNDLE/rkdev-release.json" .
+        sha256sum "${images[0]}" "${manifests[0]}" rkdev-release.json > SHA256SUMS
     )
 fi
 
