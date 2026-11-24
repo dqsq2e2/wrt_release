@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 # install_feeds 前的软件包源码替换与补齐。
 
+allow_arm64_golang_bootstrap() {
+    # The feed already ships a verified arm64 bootstrap; older recipes omit it here.
+    sed -i -E '/^BOOTSTRAP_GO_VALID_OS_ARCH[[:blank:]]*:=/ {
+        :arches
+        /\\$/ { N; b arches; }
+        /(^|[=[:space:]])linux_arm64([[:space:]]|$)/! s/^(BOOTSTRAP_GO_VALID_OS_ARCH[[:blank:]]*:=)[[:blank:]]*/\1 linux_arm64 /
+    }' "$1"
+}
+
+
 update_golang() {
     if [[ -d ./feeds/packages/lang/golang ]]; then
         echo "正在更新 golang 软件包..."
@@ -9,6 +19,7 @@ update_golang() {
             echo "错误：克隆 golang 仓库 $GOLANG_REPO 失败" >&2
             exit 1
         fi
+        allow_arm64_golang_bootstrap ./feeds/packages/lang/golang/golang/Makefile
     fi
 }
 
