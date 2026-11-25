@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# 3ginfo-lite sources this file for the FM650's USB ID.
+
+fm650_status_query() {
+	timeout -k 1 4 sms_tool -D -d "$DEVICE" at "$1" 2>/dev/null | tr -d '\r'
+}
+
+MODEL="$(fm650_status_query 'AT+CGMM' | sed -n '/^FM650[A-Z0-9-]*$/p' | head -n1)"
+FW="$(fm650_status_query 'AT+GMR' | sed -n '/^[0-9][0-9A-Za-z._-]*$/p' | head -n1)"
+PROTO=NCM
+sim="$(fm650_status_query 'AT+CPIN?')"
+case "$sim" in
+	*'SIM not inserted'*|*'CME ERROR: 10'*) REG='SIM not inserted' ;;
+	*'+CPIN: SIM PIN'*) REG='SIM PIN required' ;;
+	*'+CPIN: SIM PUK'*) REG='SIM PUK required' ;;
+	*'+CPIN: READY'*)
+		eps="$(fm650_status_query 'AT+CEREG?' | awk -F, '/^\+CEREG:/ {print $2; exit}')"
+		nr="$(fm650_status_query 'AT+C5GREG?' | awk -F, '/^\+C5GREG:/ {print $2; exit}')"
+		case "$nr" in
+			1|5) REG="$nr"; MODE='5G SA' ;;
+			*) REG="$eps" ;;
+		esac
+		;;
+esac

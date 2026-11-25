@@ -1,0 +1,10 @@
+--- a/htdocs/luci-static/resources/protocol/ncm.js
++++ b/htdocs/luci-static/resources/protocol/ncm.js
+@@ -10,5 +10,6 @@
+ 		var rv = [];
+ 		for (var i = 0; i < list.length; i++)
+-			if (list[i].name.match(/^ttyUSB/) || list[i].name.match(/^cdc-wdm/))
++			if (list[i].name === 'fm650-at' || list[i].name.match(/^ttyUSB/) ||
++			    list[i].name.match(/^cdc-wdm/))
+ 				rv.push(params.path + list[i].name);
+ 		return rv.sort();

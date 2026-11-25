@@ -605,6 +605,10 @@ source "$BASE_PATH/modules/verify.sh"
 target_makefile="target/linux/mediatek/Makefile"
 if [[ $Dev == bq3588c_immwrt ]]; then
     target_makefile="target/linux/rockchip/Makefile"
+    patch --batch --forward -p1 -d feeds/luci/applications/luci-app-3ginfo-lite \
+        < "$BASE_PATH/patches/bq3588c-3ginfo.patch" || exit 1
+    patch --batch --forward -p1 -d feeds/luci/protocols/luci-proto-ncm \
+        < "$BASE_PATH/patches/bq3588c-luci-ncm.patch" || exit 1
     command -v sgdisk >/dev/null || { echo "BQ3588C image creation requires sgdisk (gdisk)." >&2; exit 1; }
     BQ3588C_RKDEV_BUNDLE=$(mktemp -d)
     export BQ3588C_RKDEV_BUNDLE
@@ -618,7 +622,8 @@ if [[ $Dev == bq3588c_immwrt ]]; then
     for option in TARGET_rockchip_armv8_DEVICE_bearkey_bq3588c TARGET_ROOTFS_EXT4FS \
             PACKAGE_kmod-brcmfmac PACKAGE_brcmfmac-firmware-43752-sdio PACKAGE_brcmfmac-nvram-43752-sdio \
             PACKAGE_kmod-usb-net-cdc-ncm PACKAGE_kmod-usb-serial-option PACKAGE_comgt-ncm \
-            PACKAGE_luci-proto-ncm PACKAGE_modemmanager PACKAGE_luci-proto-modemmanager \
+            PACKAGE_luci-proto-ncm PACKAGE_luci-app-3ginfo-lite PACKAGE_luci-i18n-3ginfo-lite-zh-cn \
+            PACKAGE_flock PACKAGE_sms-tool \
             PACKAGE_wpad-openssl \
             PACKAGE_kmod-drm-panfrost PACKAGE_kmod-drm-rockchip; do
         grep -qx "CONFIG_$option=y" .config || { echo "Missing BQ3588C config: $option" >&2; exit 1; }
@@ -671,13 +676,17 @@ if [[ $Dev == bq3588c_immwrt ]]; then
             exit 1
         }
         gzip -t "${images[0]}"
-        for package in kmod-drm-panfrost kmod-drm-rockchip luci-proto-ncm \
-                modemmanager luci-proto-modemmanager; do
+        for package in kmod-drm-panfrost kmod-drm-rockchip comgt-ncm luci-proto-ncm \
+                luci-app-3ginfo-lite luci-i18n-3ginfo-lite-zh-cn flock sms-tool; do
             grep -q "^$package " "${manifests[0]}" || {
                 echo "Missing BQ3588C firmware package: $package" >&2
                 exit 1
             }
         done
+        if grep -Eq '^(modemmanager|luci-proto-modemmanager) ' "${manifests[0]}"; then
+            echo "Unexpected ModemManager package in BQ3588C firmware." >&2
+            exit 1
+        fi
         cp "$BQ3588C_RKDEV_BUNDLE/rkdev-release.json" .
         sha256sum "${images[0]}" "${manifests[0]}" rkdev-release.json > SHA256SUMS
     )

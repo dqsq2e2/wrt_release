@@ -1,0 +1,11 @@
+--- a/root/usr/share/3ginfo-lite/3ginfo.sh
++++ b/root/usr/share/3ginfo-lite/3ginfo.sh
+@@ -191,4 +191,8 @@
+ DEVICE=$($RES/detect.sh)
++if [ "$DEVICE" = /dev/fm650-info ]; then
++	DEVICE="$(readlink -f "$DEVICE")"
++	[ -c "$DEVICE" ] || DEVICE=
++fi
+ if [ -z "$DEVICE" ]; then
+ 	echo '{"error":"Device not found"}'
+ 	exit 0
