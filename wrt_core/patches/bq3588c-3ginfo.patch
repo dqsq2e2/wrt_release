@@ -9,3 +9,22 @@
  if [ -z "$DEVICE" ]; then
  	echo '{"error":"Device not found"}'
  	exit 0
+--- a/htdocs/luci-static/resources/view/modem/3gdetail.js
++++ b/htdocs/luci-static/resources/view/modem/3gdetail.js
+@@ -201,11 +201,7 @@
+ function active_select() {
+-	uci.load('modemdefine').then(function() {
+-		var modemz = (uci.get('modemdefine', '@modemdefine[1]', 'comm_port'));
+-		if (!modemz) {
+-			document.getElementById("modc").disabled = true;
+-		}
+-		else {
+-			document.getElementById("modc").disabled = false;
+-		}
+-	});
++	L.resolveDefault(uci.load('modemdefine'), null).then(function(loaded) {
++		var button = document.getElementById("modc");
++		if (loaded && button)
++			button.disabled = !uci.get('modemdefine', '@modemdefine[1]', 'comm_port');
++	});
+ }

@@ -5,6 +5,30 @@ fm650_status_query() {
 	timeout -k 1 4 sms_tool -D -d "$DEVICE" at "$1" 2>/dev/null | tr -d '\r'
 }
 
+fm650_status_signal() {
+	# TS 27.007 +CESQ: the first six fields are legacy metrics, the last
+	# three are NR SS-RSRQ, SS-RSRP and SS-SINR. 255 means unavailable.
+	set -- $(fm650_status_query 'AT+CESQ' | awk -F '[:,]' '
+		function valid(v, max) { return v ~ /^[0-9]+$/ && v <= max }
+		/^\+CESQ:/ {
+			gsub(/[[:space:]]/, "")
+			if (valid($9, 126)) {
+				printf "%d %d ", $9 - 157, int($9 * 100 / 126) + ($9 < 2)
+				printf "%s ", valid($8, 127) ? ($8 - 87) / 2 : "-"
+				printf "%s\n", valid($10, 127) ? ($10 - 47) / 2 : "-"
+			} else if (valid($7, 97)) {
+				printf "%d %d ", $7 - 141, int($7 * 100 / 97) + ($7 == 0)
+				printf "%s -\n", valid($6, 34) ? ($6 - 40) / 2 : "-"
+			}
+			exit
+		}')
+	[ "$#" -eq 4 ] || return 0
+	RSRP="$1"
+	CSQ_PER="$2"
+	RSRQ="$3"
+	SINR="$4"
+}
+
 MODEL="$(fm650_status_query 'AT+CGMM' | sed -n '/^FM650[A-Z0-9-]*$/p' | head -n1)"
 FW="$(fm650_status_query 'AT+GMR' | sed -n '/^[0-9][0-9A-Za-z._-]*$/p' | head -n1)"
 PROTO=NCM
@@ -22,3 +46,5 @@ case "$sim" in
 		esac
 		;;
 esac
+
+fm650_status_signal
